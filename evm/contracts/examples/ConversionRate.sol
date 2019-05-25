@@ -181,6 +181,7 @@ contract ConversionRate is ChainlinkClient, Ownable {
     uint256 middleIndex = responseLength.div(2);
     if (responseLength % 2 == 0) {
       uint256 median1 = quickselect(answers[_answerId].responses, middleIndex);
+      emit Debug2(0);
       uint256 median2 = quickselect(answers[_answerId].responses, middleIndex.add(1));
       currentRate = median1.add(median2).div(2);
     } else {
@@ -189,7 +190,7 @@ contract ConversionRate is ChainlinkClient, Ownable {
     latestCompletedAnswer = _answerId;
   }
 
-  /**
+ /**
    * @dev Returns the kth value of the ordered array
    * See: http://www.cs.yale.edu/homes/aspnes/pinewiki/QuickSelect.html
    * @param _list The list of elements to pull from
@@ -198,45 +199,62 @@ contract ConversionRate is ChainlinkClient, Ownable {
   // solium-disable-next-line security/no-assign-params
   function quickselect(uint256[] memory _list, uint256 _k)
     private
-    pure
+    //pure
     returns (uint256)
   {
     uint256 listLen = _list.length;
-    uint256[] memory lt = new uint256[](listLen);
-    uint256[] memory gt = new uint256[](listLen);
     uint256 pivot;
-    uint256 ltLen;
-    uint256 gtLen;
+    uint256 pivotValue;
+    uint256 last;
+    uint256 lessThanCount;
     uint256 i;
 
     while (true) {
-      pivot = _list[listLen.div(2)];
-      ltLen = 0;
-      gtLen = 0;
-      for (i = 0; i < listLen; i++) {
-        if (_list[i] < pivot) {
-          lt[ltLen] = _list[i];
-          ltLen++;
-        } else if (_list[i] > pivot) {
-          gt[gtLen] = _list[i];
-          gtLen++;
+      lessThanCount = 0;
+      last = listLen.sub(1);
+      pivot = listLen / 2;
+      pivotValue = _list[pivot];
+      swap(pivot, last, _list);
+      emit Debug2(pivotValue);
+
+      for (i = 0; i < last; i++) {
+        if (_list[i] < pivotValue) {
+          swap(pivot, i, _list);
+          lessThanCount++;
         }
       }
-      if (_k <= ltLen) {
-        listLen = ltLen;
-        for (i = 0; i < ltLen; i++) {
-          _list[i] = lt[i];
-        }
-      } else if (_k > (listLen.sub(gtLen))) {
-        _k = _k.sub(listLen.sub(gtLen));
-        listLen = gtLen;
-        for (i = 0; i < gtLen; i++) {
-          _list[i] = gt[i];
-        }
+
+      if (_k == lessThanCount) {
+        emit Debug(_list, pivotValue);
+        return pivotValue;
+      } else if (_k < lessThanCount) {
+        listLen = lessThanCount;
+        emit Debug(_list, pivotValue);
       } else {
-        return pivot;
+        swap(lessThanCount, last, _list);
+        for (i = lessThanCount; i < listLen; i++) {
+          _list[i.sub(lessThanCount)] = _list[i];
+        }
+        _k -= lessThanCount.add(1);
+        emit Debug(_list, pivotValue);
       }
     }
+  }
+
+  event Debug(uint256[] vals, uint256 pivot);
+  event Current(uint256[] vals);
+  event Debug2(uint256 blah);
+  event Swap(uint256 i, uint256 j, uint256[] vals);
+
+  function swap(uint256 i, uint256 j, uint256[] memory list)
+    private
+    //pure
+  {
+    emit Current(list);
+    uint256 tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+    emit Swap(list[j], list[i], list);
   }
 
   /**

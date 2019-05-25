@@ -143,7 +143,7 @@ contract('ConverstionRate', () => {
       })
     })
 
-    context('with an even number of oracles', () => {
+    context.only('with an even number of oracles', () => {
       beforeEach(async () => {
         oracles = [oc1, oc2, oc3, oc4]
         rate = await h.deploy(
