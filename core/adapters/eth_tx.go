@@ -44,7 +44,13 @@ func (etx *EthTx) Perform(input models.RunResult, store *strpkg.Store) models.Ru
 	}
 
 	if !input.Status.PendingConfirmations() {
-		createTxRunResult(etx, &input, store)
+		value, err := getTxData(etx, &input)
+		if err != nil {
+			input.SetError(errors.Wrap(err, "while constructing EthTx data"))
+			return input
+		}
+		data := utils.ConcatBytes(etx.FunctionSelector.Bytes(), etx.DataPrefix, value)
+		createTxRunResult(etx.Address, etx.GasPrice, etx.GasLimit, data, &input, store)
 		return input
 	}
 	ensureTxRunResult(&input, store)
@@ -71,7 +77,10 @@ func getTxData(e *EthTx, input *models.RunResult) ([]byte, error) {
 }
 
 func createTxRunResult(
-	e *EthTx,
+	address common.Address,
+	gasPrice *models.Big,
+	gasLimit uint64,
+	data []byte,
 	input *models.RunResult,
 	store *strpkg.Store,
 ) {
@@ -92,8 +101,8 @@ func createTxRunResult(
 		jobRunID,
 		e.Address,
 		data,
-		e.GasPrice.ToInt(),
-		e.GasLimit,
+		gasPrice.ToInt(),
+		gasLimit,
 	)
 	if IsClientRetriable(err) {
 		input.MarkPendingConnection()
