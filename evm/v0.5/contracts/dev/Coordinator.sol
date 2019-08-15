@@ -215,8 +215,6 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     isValidRequest(_requestId)
     returns (bool)
   {
-    storeResponse(_requestId, _data);
-
     Callback memory callback = callbacks[_requestId];
     address[] memory oracles = serviceAgreements[callback.sAId].oracles;
     if (oracles.length != callback.responseCount) {
