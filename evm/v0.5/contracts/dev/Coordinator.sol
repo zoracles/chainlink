@@ -204,23 +204,26 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    * @dev Response must have a valid callback, and will delete the associated callback storage
    * before calling the external contract.
    * @param _requestId The fulfillment request ID that must match the requester's
-   * @param _data The data to return to the consuming contract
+   * @param _aggregatorArgs The binary call data to send to the aggregator.
    * @return Status if the external call was successful
    */
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes32 _data
+    bytes memory _aggregatorArgs
   )
     external
     isValidRequest(_requestId)
     returns (bool)
   {
-    uint256(_data) << 1;
     Callback memory callback = callbacks[_requestId];
     ServiceAgreement storage sa = serviceAgreements[callback.sAId];
-    bytes memory args; /* XXX:  */
-    (bool success,) = address(sa.aggregator).call(args /* XXX: sa.aggFulfillSelector, _requestId, _data */);
-    // bytes memory result = new bytes(10);
+    require(matchesFunctionSelector(_aggregatorArgs, sa.aggFulfillSelector),
+            "must call aggregator fulfill method");
+    require(matchesBytes32Arg(_aggregatorArgs, _requestId, 0),
+            "pass requestId to aggregator")
+    (bool success, bytes memory aggResponse) = address(sa.aggregator).call(_aggregatorArgs);
+    require(success, "aggregator failed");
+    (bool valid, bool complete, bytes response) = parseAggregatorResponse(aggResponse);
     assembly { // solhint-disable-line no-inline-assembly
       
     }
@@ -231,6 +234,60 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     return success;
   }
 
+  /*****************************************************************************
+   * @notice returns true iff first four bytes of _args match _selector
+   * @param _args Raw bytes for arguments to a method call
+   * @param _selector Low-level specification of method _args is calling
+   ****************************************************************************/
+  function matchesFunctionSelector(bytes memory _args, bytes4 _selector) internal returns (bool) {
+    bytes4 prefix;
+    assembly { // solhint-disable-line no-inline-assembly
+      // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
+      // Layout of (bytes4 prefix):                     <byte><byte><byte><byte>
+      //
+      // So point prefix at the memory location just after the length
+      prefix = add(_args, 0x20)
+    }
+    return (_args.length >= 4) && (prefix == selector)
+  }
+
+  /*****************************************************************************
+   * @notice returns true iff _args at the given _offset matches _arg
+   * @param _args Raw bytes for arguments to a method call
+   * @param _arg Expected bytes32 in _args
+   * @param _offset Where the _arg is expected in the _args
+   ****************************************************************************/
+  function matchesBytes32Arg(bytes memory _args, bytes32 _arg, uint256 offset) internal returns (bool) {
+    bytes32 arg;
+    assembly { // solhint-disable-line no-inline-assembly
+      // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
+      // Layout of (bytes32 arg): <byte><byte><byte>...<byte>
+      //
+      // So point prefix at the memory location just after the length, plus the _offset
+      arg = add(add(_args, 0x20), _offset)
+    }
+    return (_args.length >= WORD_LENGTH) && (_arg == arg);
+  }
+
+  /*****************************************************************************
+   * @notice Parses the _response from aggregator fulfill method.
+   * @dev Overwrites the bytes it's passed
+   * @returns
+   *   valid: Whether the oracle arguments were valid
+   *   complete: Whether the aggregator has enough responses to constuct summary
+   *   consumerArgs: Raw bytes to pass to consumer, if complete
+   ****************************************************************************/
+  function parseAggregatorResponse(bytes memory _response) internal returns (bool valid, bool complete, bytes memory consumerArgs) {
+    assembly { // solhint-disable-line no-inline-assembly
+      // First argument in response is (bool valid)
+      valid = _response
+      // Second argument is  (bool complete)
+      let completeVal := mload(add(_response, 0x20))
+      if eq(completeVal, 0) { mstore(complete, 0) }
+      if
+    }
+
+  }
   /**
    * @dev Allows the oracle operator to withdraw their LINK
    * @param _recipient is the address the funds will be sent to
