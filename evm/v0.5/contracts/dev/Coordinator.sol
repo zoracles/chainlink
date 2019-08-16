@@ -215,10 +215,14 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     isValidRequest(_requestId)
     returns (bool)
   {
+    uint256(_data) << 1;
     Callback memory callback = callbacks[_requestId];
-    address[] memory oracles = serviceAgreements[callback.sAId].oracles;
-    if (oracles.length != callback.responseCount) {
-      return true; // exit early if not all response have been received
+    ServiceAgreement storage sa = serviceAgreements[callback.sAId];
+    bytes memory args; /* XXX:  */
+    (bool success,) = address(sa.aggregator).call(args /* XXX: sa.aggFulfillSelector, _requestId, _data */);
+    // bytes memory result = new bytes(10);
+    assembly { // solhint-disable-line no-inline-assembly
+      
     }
 
     uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
