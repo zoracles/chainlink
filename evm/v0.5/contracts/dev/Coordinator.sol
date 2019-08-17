@@ -278,16 +278,20 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    *   consumerArgs: Raw bytes to pass to consumer, if complete
    ****************************************************************************/
   function parseAggregatorResponse(bytes memory _response) internal returns (bool valid, bool complete, bytes memory consumerArgs) {
+    uint256 actualResponseLength = _response.length - 64
     assembly { // solhint-disable-line no-inline-assembly
       // First argument in response is (bool valid)
       valid = _response
-      // Second argument is  (bool complete)
-      let completeVal := mload(add(_response, 0x20))
-      if eq(completeVal, 0) { mstore(complete, 0) }
-      if
+      // Second argument is (bool complete). It will be overwritten with the
+      // length of the actual response, so a copy must be taken.
+      let completeAddr := add(_response, 0x20)
+      mstore(complete, mload(completeAddr))
+      mstore(completeAddr, mload(actualResponseLength))
+      consumerArgs = completeAddr
     }
-
+    assert(consumerArgs.length == actualResponseLength);
   }
+
   /**
    * @dev Allows the oracle operator to withdraw their LINK
    * @param _recipient is the address the funds will be sent to
