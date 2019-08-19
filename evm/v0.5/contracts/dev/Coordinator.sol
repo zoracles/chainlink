@@ -22,7 +22,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     bytes4 functionId;
     uint64 cancelExpiration;
     uint8 responseCount;
-    mapping(address => uint256) responses;
+    mapping(address => uint256) responded;
   }
 
   mapping(bytes32 => Callback) private callbacks;
@@ -119,7 +119,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    */
   function initiateServiceAgreement(
     ServiceAgreement memory _agreement,
-    OracleSignatures memory _signatures
+    OracleSignatures memory _signatures,
+    bytes memory _aggregatorInitiationArguments
   )
     public
     returns (bytes32 serviceAgreementID)
@@ -140,6 +141,11 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
       _agreement.oracles,
       _signatures
     );
+
+    require(matchesFunctionSelector(_aggregatorInitiationArguments, _agreement.aggInitiateSelector),
+            "call aggregator initiator");
+
+    (success,) = _agreement.aggregat
 
     serviceAgreements[serviceAgreementID] = _agreement;
     emit NewServiceAgreement(serviceAgreementID, _agreement.requestDigest);
@@ -199,47 +205,63 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     _;
   }
 
-  /**
+  /** **************************************************************************
    * @notice Called by the Chainlink node to fulfill requests
    * @dev Response must have a valid callback, and will delete the associated callback storage
    * before calling the external contract.
    * @param _requestId The fulfillment request ID that must match the requester's
    * @param _aggregatorArgs The binary call data to send to the aggregator.
    * @return Status if the external call was successful
-   */
+   ****************************************************************************/
   function fulfillOracleRequest(
     bytes32 _requestId,
     bytes memory _aggregatorArgs
   )
     external
-    isValidRequest(_requestId)
+    isValidRequest(_requestId, _aggregatorArgs)
     returns (bool)
+  {
+    (bool complete, bytes report) = callAggregator(_requestId, _aggregatorArgs);
+    registerOracleResponse(_requestId);
+    if (complete) {
+      bytes consumerArgs = abi.encodePacked(callback.functionId, _requestId, report);
+      // solhint-disable-next-line avoid-low-level-calls
+      (bool consumerSuccess,) = callback.addr.call(consumerArgs);
+      deleteCallback(_requestId);
+      return consumerSucces;
+    }
+    return success
+  }
+
+  /** **************************************************************************
+   * @notice Send oracle response to aggregator
+   * @param _requestId Tag identifying request oracle responded to
+   * @param _aggregatorArgs oracle's response, as raw bytes to be sent to the
+   *        aggregator as a method call
+   * @return true iff the aggregator has enough information to
+   * @dev reverts if call to aggregator reverts, or _aggregatorArgs was invalid
+   ****************************************************************************/
+  function callAggregator(bytes32 _requestId, bytes _aggregatorArgs)
+    private returns (bool complete, bytes aggregatorReport)
   {
     Callback memory callback = callbacks[_requestId];
     ServiceAgreement storage sa = serviceAgreements[callback.sAId];
-    require(matchesFunctionSelector(_aggregatorArgs, sa.aggFulfillSelector),
-            "must call aggregator fulfill method");
-    require(matchesBytes32Arg(_aggregatorArgs, _requestId, 0),
-            "pass requestId to aggregator")
-    (bool success, bytes memory aggResponse) = address(sa.aggregator).call(_aggregatorArgs);
+    // solhint-disable-next-line avoid-low-level-calls
+    (bool success, bytes memory aggregatorReport) = address(sa.aggregator).call(
+      _aggregatorArgs);
     require(success, "aggregator failed");
     (bool valid, bool complete, bytes response) = parseAggregatorResponse(aggResponse);
-    assembly { // solhint-disable-line no-inline-assembly
-      
-    }
-
-    uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
-    // solhint-disable-next-line avoid-low-level-calls
-    (bool success,) = callback.addr.call(abi.encodePacked(callback.functionId, _requestId, result));
-    return success;
+    require(valid, "invalid oracle report");
   }
 
-  /*****************************************************************************
-   * @notice returns true iff first four bytes of _args match _selector
+  /** **************************************************************************
    * @param _args Raw bytes for arguments to a method call
    * @param _selector Low-level specification of method _args is calling
+   * @return true iff first four bytes of _args match _selector
    ****************************************************************************/
-  function matchesFunctionSelector(bytes memory _args, bytes4 _selector) internal returns (bool) {
+  function matchesFunctionSelector(bytes memory _args, bytes4 _selector)
+    public view returns (bool)
+  {
     bytes4 prefix;
     assembly { // solhint-disable-line no-inline-assembly
       // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
@@ -251,13 +273,15 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     return (_args.length >= 4) && (prefix == selector)
   }
 
-  /*****************************************************************************
-   * @notice returns true iff _args at the given _offset matches _arg
+  /** **************************************************************************
    * @param _args Raw bytes for arguments to a method call
    * @param _arg Expected bytes32 in _args
    * @param _offset Where the _arg is expected in the _args
+   * @return true iff _args at the given _offset matches _arg
    ****************************************************************************/
-  function matchesBytes32Arg(bytes memory _args, bytes32 _arg, uint256 offset) internal returns (bool) {
+  function matchesBytes32Arg(bytes memory _args, bytes32 _arg, uint256 offset)
+    public view returns (bool)
+  {
     bytes32 arg;
     assembly { // solhint-disable-line no-inline-assembly
       // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
@@ -269,15 +293,17 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     return (_args.length >= WORD_LENGTH) && (_arg == arg);
   }
 
-  /*****************************************************************************
+  /** **************************************************************************
    * @notice Parses the _response from aggregator fulfill method.
    * @dev Overwrites the bytes it's passed
-   * @returns
+   * @return
    *   valid: Whether the oracle arguments were valid
    *   complete: Whether the aggregator has enough responses to constuct summary
    *   consumerArgs: Raw bytes to pass to consumer, if complete
    ****************************************************************************/
-  function parseAggregatorResponse(bytes memory _response) internal returns (bool valid, bool complete, bytes memory consumerArgs) {
+  function parseAggregatorResponse(bytes memory _response)
+    private returns (bool valid, bool complete, bytes memory consumerArgs)
+  {
     uint256 actualResponseLength = _response.length - 64
     assembly { // solhint-disable-line no-inline-assembly
       // First argument in response is (bool valid)
@@ -290,6 +316,27 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
       consumerArgs = completeAddr
     }
     assert(consumerArgs.length == actualResponseLength);
+  }
+
+  /** **************************************************************************
+   * @notice Register correct response for _requestId from msg.sender
+   ****************************************************************************/
+  function registerOracleResponse(bytes32 _requestId) private {
+    callbacks[_requestId].responded[msg.sender] = true;
+    withdrawableTokens[msg.sender] = withdrawableTokens[msg.sender].add(
+      callback.amount);
+  }
+
+  /** **************************************************************************
+   * @notice remove callback data associated to _requestId
+   * @dev only oracles involved in the service agreement can delete it
+   ****************************************************************************/
+  function deleteCallback(bytes32 _requestId) private {
+    // delete response records explicitly, since `delete` won't recurse into mappings
+    for (uint256 oidx = 0; oidx < sa.oracles.length; oidx++) {
+      delete callbacks[_requestId].responded[sa.oracles[oidx]];
+    }
+    delete callbacks[_requestId];
   }
 
   /**
@@ -406,14 +453,22 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     _;
   }
 
-  /**
-   * @dev Reverts if request ID does not exist
+  /** **************************************************************************
+   * @dev Reverts if oracle response is invalid, given _requestId
    * @param _requestId The given request ID to check in stored `callbacks`
-   */
-  modifier isValidRequest(bytes32 _requestId) {
-    require(callbacks[_requestId].addr != address(0), "Must have a valid requestId");
-    require(callbacks[_requestId].responses[msg.sender] == 0, "Cannot respond twice");
-    require(allowedOracles[callbacks[_requestId].sAId][msg.sender], "Oracle not recognized on service agreement");
+   ****************************************************************************/
+  modifier isValidRequest(bytes32 _requestId, bytes memory _aggregatorArgs) {
+    Callback memory callback = callbacks[_requestId];
+    require(callback.addr != address(0), "Must have a valid requestId");
+    require(allowedOracles[callback.saId][msg.sender],
+            "respondant not part of svc agrmnt")
+    require(!callback.responded[msg.sender], "oracle already reported")
+    ServiceAgreement storage sa = serviceAgreements[callback.sAId];
+    require(matchesFunctionSelector(_aggregatorArgs, sa.aggFulfillSelector),
+            "call aggregator fulfill method");
+    // First argument (past the function selector) must be the requestId
+    require(matchesBytes32Arg(_aggregatorArgs, _requestId, 4),
+            "pass requestId to aggregator");
     _;
   }
 
