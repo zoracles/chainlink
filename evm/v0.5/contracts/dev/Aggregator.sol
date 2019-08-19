@@ -5,6 +5,10 @@ pragma solidity 0.5.0;
 /* is AggregatorInterface */
 contract MeanAggregator {
 
+  // true iff address is authorized to make calls on this aggregator
+  mapping(address => bool) knownCoordinators;
+  mapping(/* saId */ bytes32 => ServiceAgreement) serviceAgreements; 
+
   // TODO(alx): Use a running average of the observations, instead. Keeping the
   // values contained in uint256's is tricky, but ought to be possible by
   // keeping track of the remainder from the division used to calculate the
@@ -27,7 +31,40 @@ contract MeanAggregator {
   // numObs remainders, each less than numObs.
   uint256 public constant RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES = 1 << 32;
 
-  /*****************************************************************************
+  constructor(address[] _knownCoordinators) {
+    for (uint256 cidx = 0; cidx < _knownCoordinators; cidx++) {
+      knownCoordinators[_knownCoordinators[cidx]] = true;
+    }
+  }
+
+  modifier senderKnownCoordinator() {
+    require(_knownCoordinators[msg.sender], "must be registered coordinator");
+    _;
+  }
+
+  function registerCoordinator(address _coordinator)() senderKnownCoordinator() {
+    _knownCoordinators[_coordinator] = true;
+  }
+
+  function revokeCoordinator(address _coordinator)() senderKnownCoordinator() {
+    _knownCoordinators[_coordinator] = false;
+  }
+
+  /** **************************************************************************
+   * @notice Called when a new job is registered
+   * XXX: This depends on ABIEncoderV2 doing the right thing, when using a
+   *      struct in multiple contexts...
+   * @dev: We don't actually use the serviceAgreement in this implementation,
+   *       but probably would for other aggregators (e.g., if the oracles have
+   *       different weights.)
+   ****************************************************************************/
+  function initiateJob(bytes32 _saId, ServiceAgreement memory _sa)
+    public senderKnownCoordinator
+  {
+    serviceAgreements[_saId] = _sa
+  }
+
+  /** **************************************************************************
    * @notice Called when a new request for data is made.
    *
    * @param _requestId The key which will be used to reference this request
@@ -38,8 +75,7 @@ contract MeanAggregator {
    *      observationsRequired on it, and the numMeasurements, and allocates
    *      space for recording the observations.
    ****************************************************************************/
-  function initiateRequest(bytes32 _requestId, uint32 _numMeasurements,
-                           /* Oracle */ address[] _oracles) public {
+  function initiateRequest(bytes32 _requestId, uint32 _numMeasurements) public {
     require(observations[_requestId].observationsRequired == 0,
       "request already initiated");
     uint32 numObs = uint32(_oracles.length);
@@ -48,7 +84,7 @@ contract MeanAggregator {
     observations[_requestId].observations = new uint256[][](_numMeasurements);
   }
 
-  /*****************************************************************************
+  /** **************************************************************************
    * @notice called when an oracle reports its value for indicated request
    *
    * @dev Records the observations in the Observations table set up for this
@@ -63,15 +99,18 @@ contract MeanAggregator {
    *          summary list of means for each measurement requested, if
    *                  complete. Empty list otherwise.
    ****************************************************************************/
-  function fulfill(bytes32 _requestId, address _oracle, uint256[] memory _currentObservations)
-    public returns (bool complete, uint256[] memory summary)
+  function fulfill(bytes32 _requestId, address _oracle,
+                   uint256[] memory _currentObservations)
+    public senderKnownCoordinator
+    returns (bool complete, uint256[] memory summary)
   {
-    Observations storage co = observations[_requestId]; // XXX: Not a copy, right?
+    Observations storage co = observations[_requestId]; // XXX: copy?
     require(!co.oraclesSeen[_oracle], "oracle has already reported");
     require(_currentObservations.length == co.observations.length,
             "wrong number of observations");
     co.oraclesSeen[_oracle] = true;
-    for (uint256 measurementIdx = 0; measurementIdx < co.observations.length; measurementIdx++) {
+    for (uint256 measurementIdx = 0; measurementIdx < co.observations.length;
+         measurementIdx++) {
       co.observations[measurementIdx].push(_currentObservations[measurementIdx]);
     }
     complete = co.observations[0].length >= co.observationsRequired;
@@ -80,23 +119,32 @@ contract MeanAggregator {
     }
   }
 
-  /*****************************************************************************
+  /** **************************************************************************
    * @returns the mean value for each requested measurement
    ****************************************************************************/
-  function computeSummary(bytes32 _requestId) internal view returns (uint256[] summary) {
+  function computeSummary(bytes32 _requestId)
+    internal view returns (uint256[] summary) {
     Observations storage co = observations[_requestId];
     summary = new uint256[](co.observations.length);
-    for (uint256 measurementIdx = 0; measurementIdx < summary.length; measurementIdx++) {
+    for (uint256 measurementIdx = 0; measurementIdx < summary.length;
+         measurementIdx++) {
       summary[measurementIdx] = computeAverage(co.observations[measurementIdx]);
     }    
   }
 
-  /*****************************************************************************
+  /** **************************************************************************
    * @title The average of the values in _observations
    * @returns sum(_observations)/_observations.length, to nearest integer
-   * @dev Overflow in carry prevented by RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES
+   * @dev Overflow in carry prevented by RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES,
+   *      because carry < observations.length**2
+   *                    < RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES**2
+   *                    < 2**256.
+   *      The first inequality holds because there are at observations.length
+   *      terms added to carry, and each term is less than observations.length,
+   *      because it's the remainder from dividing by observations.length.
    ****************************************************************************/
-  function computeAverage(uint256[] memory _observations) internal pure returns (uint256 avg) {
+  function computeAverage(uint256[] memory _observations)
+    internal pure returns (uint256 avg) {
     uint256 carry = 0;
     for (uint256 obsIdx = 0; obsIdx < _observations.length; obsIdx++) {
       avg += _observations[obsIdx] / _observations.length;

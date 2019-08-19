@@ -29,8 +29,10 @@ contract CoordinatorInterface {
     bytes32 requestDigest;
     // See ./Aggregate.sol for an example
     AggregatorInterface aggregator;
+    // Function selector for aggregator initiateJob method
+    bytes4 aggInitiateJobSelector;
     // Function selector for aggregator initiateRequest method
-    bytes4 aggInitiateSelector;
+    bytes4 aggInitiateRequestSelector;
     // Function selector for aggregator fulfill method
     bytes4 aggFulfillSelector;
   }
