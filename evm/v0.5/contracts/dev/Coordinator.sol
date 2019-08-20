@@ -226,6 +226,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
    *           _sAId, and let the aggregator look it up on this contract?
    ****************************************************************************/
   function initiateAggregatorForJob(bytes32 _sAId, ServiceAgreement memory _sa) internal {
+    // TODO(alx): It should be possible to pull this encoding out of the
+    // calldata, which would be more efficient.
     bytes memory rawEncoding = abi.encode(_sa);
     bytes memory initCall = abi.encodePacked(_sa.aggInitiateJobSelector, _sAId, rawEncoding);
     // solhint-disable-next-line avoid-low-level-calls
@@ -238,7 +240,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
    *
    * @dev Response must have a valid callback, and will delete the associated
    *      callback storage before calling the external contract.
-   * 
+   *
    * @param _requestId Fulfillment request ID, that must match the requester's
    * @param _aggregatorArgs The binary call data to send to the aggregator.
    *

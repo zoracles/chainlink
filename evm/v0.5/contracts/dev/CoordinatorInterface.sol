@@ -11,9 +11,11 @@ contract AggregatorInterface {
   // the summary data. The bool should indicate whether enough reports have
   // been made, and the summary data should be empty unless the bool is true.
   //
-  // For `initiateRequest`, the first argument should be the bytes32
-  // _requestId, the second argument an address[] containing the participating
-  // oracles. It should not return anything.
+  // For `initiateRequest`, the first argument should be the bytes32 _requestId.
+  // It should not return anything.
+  //
+  // For `initiateAggregatorForJob`, the first argument should be the
+  // ServiceAgreement describing the job. It should not return anything.
   //
   // This comment should be replaced with an explicit constraint in an
   // interface, if solidity ever evolves to allow that.
