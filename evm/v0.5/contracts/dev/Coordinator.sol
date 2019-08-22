@@ -10,7 +10,7 @@ import "../vendor/Ownable.sol";
 /**
  * @title The Chainlink Coordinator handles oracle service aggreements between one or more oracles
  */
-contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable {
+contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable /* XXX: */ {
   using SafeMath for uint256;
 
   uint256 constant public EXPIRY_TIME = 5 minutes;
@@ -75,8 +75,9 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
    * @param _nonce The nonce sent by the requester
    * @param _dataVersion The specified data version
    * @param _data The CBOR payload of the request
+   * @param _aggInitArgs The raw bytes of the message to the aggregator
    ****************************************************************************/
-  function createOracleRequest(
+  function oracleRequest(
     address _sender,
     uint256 _amount,
     bytes32 _sAId,
@@ -101,12 +102,13 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     callbacks[requestId].functionId = _callbackFunctionId;
     callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME)); // solhint-disable-line not-rely-on-time
 
-    ServiceAgreement memory sa = serviceAgreements[_sAId];
-    require(matchesFunctionSelector(_aggInitArgs,
-                                    sa.aggInitiateRequestSelector),
+    require(matchesFunctionSelector(
+              _aggInitArgs,
+              serviceAgreements[_sAId].aggInitiateRequestSelector),
             "must call agg initiator");
     // solhint-disable-next-line avoid-low-level-calls
-    (bool success,) = address(sa.aggregator).call(_aggInitArgs);
+    (bool success,) = address(serviceAgreements[_sAId].aggregator).call(
+      _aggInitArgs);
     require(success, "aggregation initiation failed");
 
     emit OracleRequest(
@@ -120,6 +122,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       _dataVersion,
       _data);
   }
+
+  /* */
 
   /** **************************************************************************
    * @notice Stores a Service Agreement which has been signed by the given oracles
@@ -503,7 +507,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     assembly { // solhint-disable-line no-inline-assembly
       calldatacopy(funcSelector, 132, 4) // grab function selector from calldata
     }
-    require(funcSelector[0] == this.createOracleRequest.selector,
+    require(funcSelector[0] == this.oracleRequest.selector,
             "Must use whitelisted functions");
     _;
   }

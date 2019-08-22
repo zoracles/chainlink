@@ -1,9 +1,10 @@
 pragma solidity 0.5.0;
+pragma experimental ABIEncoderV2;
 
-// import "./CoordinatorInterface.sol";
+import "./CoordinatorInterface.sol";
 // import "../Oracle.sol";
 /* is AggregatorInterface */
-contract MeanAggregator {
+contract MeanAggregator is CoordinatorInterface, AggregatorInterface {
 
   // true iff address is authorized to make calls on this aggregator
   mapping(address => bool) knownCoordinators;
@@ -31,54 +32,51 @@ contract MeanAggregator {
   // numObs remainders, each less than numObs.
   uint256 public constant RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES = 1 << 32;
 
-  constructor(address[] _knownCoordinators) {
-    for (uint256 cidx = 0; cidx < _knownCoordinators; cidx++) {
+  constructor(address[] memory _knownCoordinators) public {
+    for (uint256 cidx = 0; cidx < _knownCoordinators.length; cidx++) {
       knownCoordinators[_knownCoordinators[cidx]] = true;
     }
   }
 
   modifier senderKnownCoordinator() {
-    require(_knownCoordinators[msg.sender], "must be registered coordinator");
+    require(knownCoordinators[msg.sender], "must be registered coordinator");
     _;
   }
 
-  function registerCoordinator(address _coordinator)() senderKnownCoordinator() {
-    _knownCoordinators[_coordinator] = true;
+  function registerCoordinator(address _coordinator) senderKnownCoordinator() public {
+    knownCoordinators[_coordinator] = true;
   }
 
-  function revokeCoordinator(address _coordinator)() senderKnownCoordinator() {
-    _knownCoordinators[_coordinator] = false;
+  function revokeCoordinator(address _coordinator) senderKnownCoordinator() public {
+    knownCoordinators[_coordinator] = false;
   }
 
   /** **************************************************************************
    * @notice Called when a new job is registered
    * XXX: This depends on ABIEncoderV2 doing the right thing, when using a
    *      struct in multiple contexts...
-   * @dev: We don't actually use the serviceAgreement in this implementation,
-   *       but probably would for other aggregators (e.g., if the oracles have
-   *       different weights.)
    ****************************************************************************/
   function initiateJob(bytes32 _saId, ServiceAgreement memory _sa)
     public senderKnownCoordinator
   {
-    serviceAgreements[_saId] = _sa
+    serviceAgreements[_saId] = _sa;
   }
 
   /** **************************************************************************
    * @notice Called when a new request for data is made.
    *
+   * @param _sAId Key for the ServiceAgreement describing this job
    * @param _requestId The key which will be used to reference this request
    * @param _numMeasurements The number of values being measured
-   * @param _oracles Addresses of the responding oracles
    *
    * @dev Creates a new Observations table for the given _requestId, sets the
    *      observationsRequired on it, and the numMeasurements, and allocates
    *      space for recording the observations.
    ****************************************************************************/
-  function initiateRequest(bytes32 _requestId, uint32 _numMeasurements) public {
+  function initiateRequest(bytes32 _sAId, bytes32 _requestId, uint32 _numMeasurements) public {
     require(observations[_requestId].observationsRequired == 0,
       "request already initiated");
-    uint32 numObs = uint32(_oracles.length);
+    uint32 numObs = uint32(serviceAgreements[_sAId].oracles.length);
     require(numObs < RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES, "too many oracles");
     observations[_requestId].observationsRequired = numObs;
     observations[_requestId].observations = new uint256[][](_numMeasurements);
@@ -94,10 +92,10 @@ contract MeanAggregator {
    * @param _oracle The address of the responding oracle
    * @param _currentObservations Array of measurements
    *
-   * @returns complete true iff enough observations have been recorded to
-   *                   construct the summary
-   *          summary list of means for each measurement requested, if
-   *                  complete. Empty list otherwise.
+   * @return complete true iff enough observations have been recorded to
+   *                  construct the summary
+   *         summary list of means for each measurement requested, if
+   *                 complete. Empty list otherwise.
    ****************************************************************************/
   function fulfill(bytes32 _requestId, address _oracle,
                    uint256[] memory _currentObservations)
@@ -120,10 +118,10 @@ contract MeanAggregator {
   }
 
   /** **************************************************************************
-   * @returns the mean value for each requested measurement
+   * @return the mean value for each requested measurement
    ****************************************************************************/
   function computeSummary(bytes32 _requestId)
-    internal view returns (uint256[] summary) {
+    internal view returns (uint256[] memory summary) {
     Observations storage co = observations[_requestId];
     summary = new uint256[](co.observations.length);
     for (uint256 measurementIdx = 0; measurementIdx < summary.length;
@@ -133,8 +131,8 @@ contract MeanAggregator {
   }
 
   /** **************************************************************************
-   * @title The average of the values in _observations
-   * @returns sum(_observations)/_observations.length, to nearest integer
+   * @notice The average of the values in _observations
+   * @return sum(_observations)/_observations.length, to nearest integer
    * @dev Overflow in carry prevented by RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES,
    *      because carry < observations.length**2
    *                    < RIDICULOUS_BOUND_ON_NUMBER_OF_ORACLES**2

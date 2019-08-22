@@ -5,20 +5,29 @@ pragma experimental ABIEncoderV2;
 contract AggregatorInterface {
   // Has an `initiateRequest` and a `fulfill` method.
   //
-  // For `fulfill`, the first argument must be a bytes32 for the _requestId,
-  // the second the address for the reporting oracle, and the subsequent
-  // arguments must be primitive types. It should return a bool, followed by
-  // the summary data. The bool should indicate whether enough reports have
-  // been made, and the summary data should be empty unless the bool is true.
+  // For `fulfill`, the first argument must be a bytes32 for the _requestId, the
+  // second the address for the reporting oracle, and the subsequent arguments
+  // must be primitive types. It should return a bool, followed by the summary
+  // data. The bool should indicate whether enough reports have been made, and
+  // the summary data should be empty unless the bool is true. This method
+  // corresponds to the aggFulfillSelector on the ServiceAgreement struc.t
   //
-  // For `initiateRequest`, the first argument should be the bytes32 _requestId.
-  // It should not return anything.
+  // For `initiateRequest`, the first two arguments should be the bytes32 _sAId
+  // and the _requestId. It should not return anything. This method corresponds
+  // to the aggInitiateRequestSelector on the ServiceAgreement struct.
   //
   // For `initiateAggregatorForJob`, the first argument should be the
-  // ServiceAgreement describing the job. It should not return anything.
+  // ServiceAgreement describing the job. It should not return anything. This
+  // method corresponds to the aggInitiateJobSelector on the ServiceAgreement
+  // struct.
   //
   // This comment should be replaced with an explicit constraint in an
   // interface, if solidity ever evolves to allow that.
+  //
+  //////////////////////////////////////////////////////////////////////////////
+  // XXX: A nontrivial cancellation may be worthwhile, for when there's a lot of
+  //      data associated with a job. Might want a method for that, too.
+  //////////////////////////////////////////////////////////////////////////////
 }
 
 contract CoordinatorInterface {
@@ -45,7 +54,13 @@ contract CoordinatorInterface {
     bytes32[] ss;
   }
 
-  function initiateServiceAgreement(ServiceAgreement memory _agreement, OracleSignatures memory _signatures) public returns (bytes32);
+  function initiateServiceAgreement(
+    ServiceAgreement memory _agreement,
+    OracleSignatures memory _signatures)
+    public returns (bytes32);
 
-  function fulfillOracleRequest(bytes32 requestId, bytes32 data) external returns (bool);
+  function fulfillOracleRequest(
+    bytes32 _requestId,
+    bytes calldata _aggregatorArgs)
+    external returns (bool);
 }

@@ -34,7 +34,8 @@ contract Oracle is ChainlinkRequestInterface, OracleInterface, Ownable, LinkToke
     bytes4 callbackFunctionId,
     uint256 cancelExpiration,
     uint256 dataVersion,
-    bytes data
+    bytes data,
+    bytes aggregatorInitArgs
   );
 
   event CancelOracleRequest(
@@ -62,6 +63,8 @@ contract Oracle is ChainlinkRequestInterface, OracleInterface, Ownable, LinkToke
    * @param _nonce The nonce sent by the requester
    * @param _dataVersion The specified data version
    * @param _data The CBOR payload of the request
+   * @param _aggInitArgs Raw bytes for call to aggregator contract. This may be
+   *                     empty, if no aggregation is necessary.
    */
   function oracleRequest(
     address _sender,
@@ -71,7 +74,8 @@ contract Oracle is ChainlinkRequestInterface, OracleInterface, Ownable, LinkToke
     bytes4 _callbackFunctionId,
     uint256 _nonce,
     uint256 _dataVersion,
-    bytes calldata _data
+    bytes calldata _data,
+    bytes calldata _aggInitArgs
   )
     external
     onlyLINK
@@ -100,7 +104,8 @@ contract Oracle is ChainlinkRequestInterface, OracleInterface, Ownable, LinkToke
       _callbackFunctionId,
       expiration,
       _dataVersion,
-      _data);
+      _data,
+      _aggInitArgs);
   }
 
   /**
