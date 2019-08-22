@@ -61,66 +61,63 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     bytes32 internalId
   );
 
+  struct OracleRequestArgs {
+    address sender; // Address of requestor
+    bytes4 callbackFunctionId; // Method to which response should be sent
+    uint256 nonce; // Nonce used to make unique id for request
+    uint256 dataVersion; // ??? XXX: 
+    bytes data; // CBOR-encoded parameters for the tasks in the requested job
+    bytes aggInitArgs; // Raw bytes for call to aggregator's initiation method
+  }
+
   /** **************************************************************************
    * @notice Creates the Chainlink request
-
+   *
    * @dev Stores the params on-chain in a callback for the request.
-
+   *
    * Emits OracleRequest event for Chainlink nodes to detect.
-   * @param _sender The sender of the request
-   * @param _amount The amount of payment given (specified in wei)
-   * @param _sAId The Service Agreement ID
-   * @param _callbackAddress The callback address for the response
-   * @param _callbackFunctionId The callback function ID for the response
-   * @param _nonce The nonce sent by the requester
-   * @param _dataVersion The specified data version
-   * @param _data The CBOR payload of the request
-   * @param _aggInitArgs The raw bytes of the message to the aggregator
+   *
+   * @param _payment Number of LINK due each oracle on responding to request
+   * @param _sAId Identifier for ServiceAgreement covering request
+   * @param _callbackAddress Contract to which summary result should be sent
+   * @param _args See OracleRequestArgs for details
    ****************************************************************************/
-  function oracleRequest(
-    address _sender,
-    uint256 _amount,
-    bytes32 _sAId,
-    address _callbackAddress,
-    bytes4 _callbackFunctionId,
-    uint256 _nonce,
-    uint256 _dataVersion,
-    bytes calldata _data,
-    bytes calldata _aggInitArgs
-  )
+  function oracleRequest(uint256 _payment, bytes32 _sAId,
+                         address _callbackAddress, bytes calldata _args)
     external
     onlyLINK
-    sufficientLINK(_amount, _sAId)
+    sufficientLINK(_payment, _sAId)
     checkCallbackAddress(_callbackAddress)
   {
-    bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
+    OracleRequestArgs memory a = abi.decode(_args, (OracleRequestArgs));
+    bytes32 requestId = keccak256(abi.encodePacked(a.sender, a.nonce));
     require(callbacks[requestId].cancelExpiration == 0, "Must use a unique ID");
 
     callbacks[requestId].sAId = _sAId;
-    callbacks[requestId].amount = _amount;
+    callbacks[requestId].amount = _payment;
     callbacks[requestId].addr = _callbackAddress;
-    callbacks[requestId].functionId = _callbackFunctionId;
+    callbacks[requestId].functionId = a.callbackFunctionId;
     callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME)); // solhint-disable-line not-rely-on-time
 
     require(matchesFunctionSelector(
-              _aggInitArgs,
+              a.aggInitArgs,
               serviceAgreements[_sAId].aggInitiateRequestSelector),
             "must call agg initiator");
     // solhint-disable-next-line avoid-low-level-calls
     (bool success,) = address(serviceAgreements[_sAId].aggregator).call(
-      _aggInitArgs);
+      a.aggInitArgs);
     require(success, "aggregation initiation failed");
 
     emit OracleRequest(
       _sAId,
-      _sender,
+      a.sender,
       requestId,
-      _amount,
+      _payment,
       _callbackAddress,
-      _callbackFunctionId,
+      a.callbackFunctionId,
       now.add(EXPIRY_TIME), // solhint-disable-line not-rely-on-time
-      _dataVersion,
-      _data);
+      a.dataVersion,
+      a.data);
   }
 
   /* */
@@ -508,7 +505,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       calldatacopy(funcSelector, 132, 4) // grab function selector from calldata
     }
     require(funcSelector[0] == this.oracleRequest.selector,
-            "Must use whitelisted functions");
+            "Must use whitelisted functions"); XXX: Turn this back on!
     _;
   }
 }
