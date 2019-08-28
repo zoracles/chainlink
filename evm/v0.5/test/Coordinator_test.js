@@ -179,7 +179,7 @@ contract('Coordinator', () => {
         assert.equal(eventSignature, log.topics[0])
 
         assert.equal(agreement.id, log.topics[1])
-        const req = h.decodeRunRequest(tx.receipt.rawLogs[2])
+        const req = h.decodeRunRequest(tx.receipt.logs[2])
         assertBigNum(
           h.consumer,
           req.requester,

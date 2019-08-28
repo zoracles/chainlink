@@ -7,6 +7,8 @@ const abi = require('ethereumjs-abi')
 import * as util from 'ethereumjs-util'
 import { BN } from 'bn.js'
 
+/* tslint:enable no-var-requires */
+
 const HEX_BASE = 16
 
 // https://github.com/ethereum/web3.js/issues/1119#issuecomment-394217563
