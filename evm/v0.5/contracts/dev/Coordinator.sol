@@ -86,6 +86,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     external
     onlyLINK
     sufficientLINK(_amount, _sAId)
+    //checkServiceAgreementPresence(_sAId)
     checkCallbackAddress(_callbackAddress)
   {
     bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
@@ -384,6 +385,12 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
       calldatacopy(funcSelector, 132, 4) // grab function selector from calldata
     }
     require(funcSelector[0] == this.oracleRequest.selector, "Must use whitelisted functions");
+    _;
+  }
+
+  modifier checkServiceAgreementPresence(bytes32 _sAId) {
+    require(uint256(serviceAgreements[_sAId].requestDigest) != 0,
+            "Must reference an existing ServiceAgreement");
     _;
   }
 }

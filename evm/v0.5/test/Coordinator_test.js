@@ -88,8 +88,9 @@ contract('Coordinator', () => {
 
       it('calls the aggregator with the SA info', async () => {
         const tx = await h.initiateServiceAgreement(coordinator, agreement)
-        const event = await h.getLatestEvent(aggregator) // XXX: Why is this coming from the coordinator address??
+        const event = await h.getLatestEvent(aggregator)
         assert(event, 'event was expected')
+        assert.equal('InitiatedJob', event.event)
         assert.equal(agreement.id, event.args.said)
       })
     })
@@ -286,6 +287,21 @@ contract('Coordinator', () => {
               { from: h.oracleNode }
             )
           })
+        })
+
+        it.only("calls the aggregator with the oracle's result", async () => {
+          const tx = await coordinator.fulfillOracleRequest(
+            request.id,
+            h.toHex('Hello World!'),
+            { from: h.oracleNode }
+          )
+
+          const event = await h.getLatestEvent(aggregator)
+
+          assert(event, 'event was expected')
+          assert.equal('Fulfillled', event.event)
+          assert.equal(request.id, event.requestId)
+          assert.equal(h.oracleNode.address, event.sender)
         })
 
         it('sets the value on the requested contract', async () => {

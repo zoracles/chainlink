@@ -1,0 +1,5 @@
+#!/bin/bash
+
+docker run -it --rm -v `pwd`:/src ethereum/solc:0.5.0 \
+  --allow-paths /src/dev,/src/interfaces,/src/tests,/src/vendor \
+  /src/dev/Coordinator.sol /src/dev/MeanAggregator.sol

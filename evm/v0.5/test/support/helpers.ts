@@ -1,16 +1,16 @@
+import { BN } from 'bn.js'
 import cbor from 'cbor'
+import * as abi from 'ethereumjs-abi'
+import * as util from 'ethereumjs-util'
+import { FunctionFragment, ParamType } from
+  'ethers/utils/abi-coder'
 import TruffleContract from 'truffle-contract'
 import { linkToken } from './linkToken'
 import { assertBigNum } from './matchers'
-import { ParamType, FunctionFragment } from
-  'ethers/utils/abi-coder'
-import * as abi from 'ethereumjs-abi' 
-import * as util from 'ethereumjs-util'
-import { BN } from 'bn.js'
 
 /* tslint:enable no-var-requires */
 
-declare const assert: any // These names are assigned by truffle. Declare them, 
+declare const assert: any // These names are assigned by truffle. Declare them,
 declare const web3: any // to silence complaints about them being undefined. XXX:
 
 const HEX_BASE = 16
@@ -42,7 +42,7 @@ export let personas: Record<string, any> = {}
 
 before(async function queryEthClientForConstants() {
   accounts = await eth.getAccounts()
-  ;[
+  ; [
     defaultAccount,
     oracleNode1,
     oracleNode2,
@@ -53,12 +53,12 @@ before(async function queryEthClientForConstants() {
   oracleNode = oracleNode1
 
   // allow personas instead of roles
-  personas['Default'] = defaultAccount
-  personas['Neil'] = oracleNode1
-  personas['Ned'] = oracleNode2
-  personas['Nelly'] = oracleNode3
-  personas['Carol'] = consumer
-  personas['Eddy'] = stranger
+  personas.Default = defaultAccount
+  personas.Neil = oracleNode1
+  personas.Ned = oracleNode2
+  personas.Nelly = oracleNode3
+  personas.Carol = consumer
+  personas.Eddy = stranger
 })
 
 const bNToStringOrIdentity = (a: any): any => (BN.isBN(a) ? a.toString() : a)
@@ -158,7 +158,7 @@ export const isByteRepresentation = (h: any): boolean => {
 export const getEvents = (contract: any): Promise<any[]> =>
   new Promise((resolve, reject) =>
     contract
-      .getPastEvents()
+      .getPastEvents('allEvents', { fromBlock: 1 }) // https://ethereum.stackexchange.com/questions/71307/mycontract-getpasteventsallevents-returns-empty-array
       .then((events: any) => resolve(events))
       .catch((error: any) => reject(error))
   )
@@ -187,7 +187,7 @@ export const functionSelector = web3.eth.abi.encodeFunctionSignature
 export const functionSelectorFromAbi = (contract: TruffleContract, name: string): string => {
   for (const method of contract.abi) {
     if (method.name == name) {
-      return functionSelector(method) 
+      return functionSelector(method)
     }
   }
 }
@@ -268,13 +268,13 @@ export const decodeRunRequest = (log: any): any => {
 
   return {
     callbackAddr: Ox(callbackAddress),
-    callbackFunc: callbackFunc,
+    callbackFunc,
     data: autoAddMapDelimiters(data),
     dataVersion: version,
-    expiration: expiration,
+    expiration,
     id: requestId,
     jobId: log.topics[1],
-    payment: payment,
+    payment,
     requester: Ox(requester),
     topic: log.topics[0]
   }
@@ -512,8 +512,8 @@ export const personalSign = async (
   message: any
 ): Promise<any> => {
   const eMsg = `Message ${message} is not a recognized representation of a ` +
-    `byte array. (Can be Buffer, BigNumber, Uint8Array, 0x-prepended ` +
-    `hexadecimal string.)`
+    'byte array. (Can be Buffer, BigNumber, Uint8Array, 0x-prepended ' +
+    'hexadecimal string.)'
   assert(isByteRepresentation(message), eMsg)
   return newSignature(await web3.eth.sign(toHex(message), account))
 }
@@ -616,9 +616,9 @@ export const initiateServiceAgreementArgs = (
   serviceAgreement: ServiceAgreement
 ): any[] => {
   const signatures = {
-    'vs': serviceAgreement.oracleSignatures.map(os => os.v),
-    'rs': serviceAgreement.oracleSignatures.map(os => os.r),
-    'ss': serviceAgreement.oracleSignatures.map(os => os.s)
+    vs: serviceAgreement.oracleSignatures.map(os => os.v),
+    rs: serviceAgreement.oracleSignatures.map(os => os.r),
+    ss: serviceAgreement.oracleSignatures.map(os => os.s)
   }
   const tup = (s: any, n: any) =>
     structAsTuple(s, coordinator, 'initiateServiceAgreement', n).struct
@@ -757,4 +757,3 @@ export const encodeAddress = (a: string): string => {
   assert(Ox(a).length <= 40, `${a} is too long to be an address`)
   return Ox(strip0x(a).padStart(40, '0'))
 }
-
