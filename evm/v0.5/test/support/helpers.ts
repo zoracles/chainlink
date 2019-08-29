@@ -182,11 +182,15 @@ export const requestDataFrom = (
   return link.transferAndCall(oc.address, amount, args, options)
 }
 
-export const functionSelector = (signature: any): string =>
-  '0x' +
-  keccak(signature)
-    .slice(2)
-    .slice(0, 8)
+export const functionSelector = web3.eth.abi.encodeFunctionSignature
+
+export const functionSelectorFromAbi = (contract: TruffleContract, name: string): string => {
+  for (const method of contract.abi) {
+    if (method.name == name) {
+      return functionSelector(method) 
+    }
+  }
+}
 
 export const assertActionThrows = (action: any) =>
   Promise.resolve()
@@ -682,7 +686,7 @@ export const newServiceAgreement = async (
   agreement.oracleSignatures = []
   agreement.requestDigest = params.requestDigest ||
     '0xbadc0de5badc0de5badc0de5badc0de5badc0de5badc0de5badc0de5badc0de5'
-  agreement.aggregator = '0x3141592653589793238462643383279502884197'
+  agreement.aggregator = params.aggregator || '0x3141592653589793238462643383279502884197'
   agreement.aggInitiateJobSelector = params.aggInitiateJobSelector || '0x12345678'
   agreement.aggInitiateRequestSelector =
     params.aggInitiateRequestSelector || '0x9abcdef0'

@@ -1,32 +1,26 @@
 import * as h from './support/helpers'
 import { assertBigNum } from './support/matchers'
 const Coordinator = artifacts.require('dev/Coordinator.sol')
-const Aggregator = artifacts.require('dev/MeanAggregator.sol')
+const Aggregator = artifacts.require('test/EmptyAggregator.sol')
 const GetterSetter = artifacts.require('GetterSetter.sol')
 const MaliciousConsumer = artifacts.require('MaliciousConsumer.sol')
 const MaliciousRequester = artifacts.require('MaliciousRequester.sol')
 
-const aggInitiateJobSelector = h.functionSelector(
-  'initiateJob(bytes32,tuple(uint256,uint256,uint256,address[],bytes32,address,bytes4,bytes4,bytes4))'
-)
-const aggInitiateRequestSelector = h.functionSelector(
-  'initiateRequest(bytes32,bytes32,uint32)'
-)
-const aggFulfillSelector = h.functionSelector('fulfill(bytes32,address,uint256[])')
+let aggInitiateJobSelector, aggFulfillSelector
 
 contract('Coordinator', () => {
-  let coordinator, link, newServiceAgreement
+  let coordinator, link, newServiceAgreement, aggregator
 
   beforeEach(async () => {
     link = await h.linkContract()
     coordinator = await Coordinator.new(link.address)
-    const aggregator = await Aggregator.new([coordinator.address])
-    // XXX: There should be a way to do this from the contract ABI using web3/truffle
+    aggregator = await Aggregator.new()
+    const fs = name => h.functionSelectorFromAbi(aggregator, name)
     const partialServiceAgreement = {
       aggregator: aggregator.address,
-      aggInitiateJobSelector,
-      aggInitiateRequestSelector,
-      aggFulfillSelector
+      aggInitiateJobSelector: fs('initiateJob'),
+      // aggInitiateRequestSelector: fs('initiateRequest'), // not using this for now.
+      aggFulfillSelector: fs('fulfill')
     }
     newServiceAgreement = async sA =>
       h.newServiceAgreement({ ...partialServiceAgreement, ...sA })
@@ -68,7 +62,7 @@ contract('Coordinator', () => {
 
   describe('#initiateServiceAgreement', () => {
     let agreement
-    before(async () => {
+    beforeEach(async () => {
       agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
     })
 
@@ -91,11 +85,18 @@ contract('Coordinator', () => {
         const event = await h.getLatestEvent(coordinator)
         assert.equal(agreement.id, event.args.said)
       })
+
+      it('calls the aggregator with the SA info', async () => {
+        const tx = await h.initiateServiceAgreement(coordinator, agreement)
+        const event = await h.getLatestEvent(aggregator) // XXX: Why is this coming from the coordinator address??
+        assert(event, 'event was expected')
+        assert.equal(agreement.id, event.args.said)
+      })
     })
 
     context('with an invalid oracle signatures', () => {
       let badOracleSignature, badRequestDigestAddr
-      before(async () => {
+      beforeEach(async () => {
         const sAID = h.calculateSAID(agreement)
         badOracleSignature = await h.personalSign(h.stranger, sAID)
         badRequestDigestAddr = h.recoverPersonalSignature(
@@ -133,11 +134,9 @@ contract('Coordinator', () => {
     const fHash = h.functionSelector('requestedBytes32(bytes32,bytes32)')
     const to = '0x80e29acb842498fe6591f020bd82766dce619d43'
     let agreement
-    before(async () => {
-      agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
-    })
 
     beforeEach(async () => {
+      agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
       await h.initiateServiceAgreement(coordinator, agreement)
       await link.transfer(h.consumer, h.toWei(1000))
     })
@@ -152,8 +151,6 @@ contract('Coordinator', () => {
           '1',
           ''
         )
-        console.log('payload', payload)
-        console.log('sa', agreement)
         tx = await link.transferAndCall(
           coordinator.address,
           agreement.payment,
@@ -177,7 +174,6 @@ contract('Coordinator', () => {
         assert.equal(eventSignature, log.topics[0])
 
         assert.equal(agreement.id, log.topics[1])
-        console.log('tx receipt', tx.receipt)
         const req = h.decodeRunRequest(tx.receipt.rawLogs[2])
         assertBigNum(
           h.consumer,
@@ -259,14 +255,12 @@ contract('Coordinator', () => {
           1,
           ''
         )
-        console.log('payload', payload)
         const tx = await link.transferAndCall(
           coordinator.address,
           agreement.payment,
           payload,
           { value: 0 }
         )
-        console.log('tx', tx.rawLogs)
         request = h.decodeRunRequest(tx.receipt.rawLogs[2])
       })
 

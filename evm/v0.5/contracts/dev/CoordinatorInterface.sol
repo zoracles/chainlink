@@ -44,7 +44,7 @@ contract CoordinatorInterface {
     bytes32 requestDigest; 
 
     // Specification of aggregator interface. See ./Aggregate.sol for an example
-    AggregatorInterface aggregator; 
+    address aggregator;
     // Selectors for the interface methods must be specified, because their
     // arguments are arbitrary.
     //
@@ -69,6 +69,6 @@ contract CoordinatorInterface {
 
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes calldata _aggregatorArgs)
+    bytes32 _aggregatorArgs)
     external returns (bool);
 }

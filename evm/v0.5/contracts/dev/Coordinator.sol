@@ -91,16 +91,12 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
     require(callbacks[requestId].cancelExpiration == 0, "Must use a unique ID");
 
-    ServiceAgreement memory sA = serviceAgreements[_sAId];
-    require(uint256(sA.requestDigest) != 0,
-            "Must reference an existing ServiceAgreement");
     callbacks[requestId].sAId = _sAId;
     callbacks[requestId].amount = _amount;
     callbacks[requestId].addr = _callbackAddress;
     callbacks[requestId].functionId = _callbackFunctionId;
     // solhint-disable-next-line not-rely-on-time
     callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME));
-    
 
     emit OracleRequest(
       _sAId,
@@ -148,6 +144,12 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
 
     serviceAgreements[serviceAgreementID] = _agreement;
     emit NewServiceAgreement(serviceAgreementID, _agreement.requestDigest);
+    (bool ok,) = _agreement.aggregator.call(abi.encodeWithSelector(
+      _agreement.aggInitiateJobSelector,
+      serviceAgreementID,
+      _agreement
+    ));
+    require(ok, "Aggregator failed to initiate Service Agreement");
   }
 
   /**
@@ -214,16 +216,21 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    */
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes calldata _data
+    bytes32 _data
   )
-    external
-    isValidRequest(_requestId)
-    returns (bool)
+  external
+  isValidRequest(_requestId)
+  returns (bool)
   {
-    Callback memory callback = callbacks[_requestId];
-    ServiceAgreement memory sA = serviceAgreements[callback.sAId];
+    storeResponse(_requestId, _data);
 
-    uint256 result = aggregateAndPay(_requestId, callback.amount, sA.oracles);
+    Callback memory callback = callbacks[_requestId];
+    address[] memory oracles = serviceAgreements[callback.sAId].oracles;
+    if (oracles.length != callback.responseCount) {
+      return true; // exit early if not all response have been received
+    }
+
+    uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
     // solhint-disable-next-line avoid-low-level-calls
     (bool success,) = callback.addr.call(abi.encodePacked(callback.functionId, _requestId, result));
     return success;
