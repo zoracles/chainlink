@@ -100,7 +100,7 @@ contract MeanAggregator is CoordinatorInterface, AggregatorInterface {
   function fulfill(bytes32 _requestId, address _oracle,
                    uint256[] memory _currentObservations)
     public senderKnownCoordinator
-    returns (bool complete, uint256[] memory summary)
+    returns (bool valid, bool complete, uint256[] memory summary)
   {
     Observations storage co = observations[_requestId]; // XXX: copy?
     require(!co.oraclesSeen[_oracle], "oracle has already reported");

@@ -24,14 +24,7 @@ contract('Coordinator', () => {
       'oracleRequest',
       'serviceAgreements',
       'withdraw',
-      'withdrawableTokens',
-      // Ownable methods:
-      'isOwner',
-      'owner',
-      'transferOwnership',
-      // XXX may want to make these private
-      'matchesFunctionSelector',
-      'matchesBytes32Arg'
+      'withdrawableTokens'
     ])
   })
 
@@ -140,6 +133,8 @@ contract('Coordinator', () => {
           '1',
           ''
         )
+        console.log('payload', payload)
+        console.log('sa', agreement)
         tx = await link.transferAndCall(
           coordinator.address,
           agreement.payment,
@@ -163,7 +158,8 @@ contract('Coordinator', () => {
         assert.equal(eventSignature, log.topics[0])
 
         assert.equal(agreement.id, log.topics[1])
-        const req = h.decodeRunRequest(tx.receipt.logs[2])
+        console.log('tx receipt', tx.receipt)
+        const req = h.decodeRunRequest(tx.receipt.rawLogs[2])
         assertBigNum(
           h.consumer,
           req.requester,
@@ -244,12 +240,14 @@ contract('Coordinator', () => {
           1,
           ''
         )
+        console.log('payload', payload)
         const tx = await link.transferAndCall(
           coordinator.address,
           agreement.payment,
           payload,
           { value: 0 }
         )
+        console.log('tx', tx.rawLogs)
         request = h.decodeRunRequest(tx.receipt.rawLogs[2])
       })
 

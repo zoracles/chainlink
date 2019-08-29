@@ -68,6 +68,6 @@ contract CoordinatorInterface {
 
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes calldata _aggregatorArgs)
+    bytes32 _aggregatorArgs)
     external returns (bool);
 }

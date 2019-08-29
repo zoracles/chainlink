@@ -5,12 +5,11 @@ import "./CoordinatorInterface.sol";
 import "../interfaces/ChainlinkRequestInterface.sol";
 import "../interfaces/LinkTokenInterface.sol";
 import "../vendor/SafeMath.sol";
-import "../vendor/Ownable.sol";
 
 /**
  * @title The Chainlink Coordinator handles oracle service aggreements between one or more oracles
  */
-contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable /* XXX: */ {
+contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
   using SafeMath for uint256;
 
   uint256 constant public EXPIRY_TIME = 5 minutes;
@@ -23,7 +22,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     bytes4 functionId;
     uint64 cancelExpiration;
     uint8 responseCount;
-    mapping(address => bool) responded;
+    mapping(address => uint256) responses;
   }
 
   mapping(bytes32 => Callback) private callbacks;
@@ -61,78 +60,63 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     bytes32 internalId
   );
 
-  struct OracleRequestArgs {
-    address sender; // Address of requestor
-    bytes4 callbackFunctionId; // Method to which response should be sent
-    uint256 nonce; // Nonce used to make unique id for request
-    uint256 dataVersion; // ??? XXX: 
-    bytes data; // CBOR-encoded parameters for the tasks in the requested job
-    bytes aggInitArgs; // Raw bytes for call to aggregator's initiation method
-  }
-
-  /** **************************************************************************
+  /**
    * @notice Creates the Chainlink request
-   *
    * @dev Stores the params on-chain in a callback for the request.
-   *
    * Emits OracleRequest event for Chainlink nodes to detect.
-   *
-   * @param _payment Number of LINK due each oracle on responding to request
-   * @param _sAId Identifier for ServiceAgreement covering request
-   * @param _callbackAddress Contract to which summary result should be sent
-   * @param _args See OracleRequestArgs for details
-   ****************************************************************************/
-  function oracleRequest(uint256 _payment, bytes32 _sAId,
-                         address _callbackAddress, bytes calldata _args)
+   * @param _sender The sender of the request
+   * @param _amount The amount of payment given (specified in wei)
+   * @param _sAId The Service Agreement ID
+   * @param _callbackAddress The callback address for the response
+   * @param _callbackFunctionId The callback function ID for the response
+   * @param _nonce The nonce sent by the requester
+   * @param _dataVersion The specified data version
+   * @param _data The CBOR payload of the request
+   */
+  function oracleRequest(
+    address _sender,
+    uint256 _amount,
+    bytes32 _sAId,
+    address _callbackAddress,
+    bytes4 _callbackFunctionId,
+    uint256 _nonce,
+    uint256 _dataVersion,
+    bytes calldata _data
+  )
     external
     onlyLINK
-    sufficientLINK(_payment, _sAId)
+    sufficientLINK(_amount, _sAId)
     checkCallbackAddress(_callbackAddress)
   {
-    OracleRequestArgs memory a = abi.decode(_args, (OracleRequestArgs));
-    bytes32 requestId = keccak256(abi.encodePacked(a.sender, a.nonce));
+    bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
     require(callbacks[requestId].cancelExpiration == 0, "Must use a unique ID");
 
     callbacks[requestId].sAId = _sAId;
-    callbacks[requestId].amount = _payment;
+    callbacks[requestId].amount = _amount;
     callbacks[requestId].addr = _callbackAddress;
-    callbacks[requestId].functionId = a.callbackFunctionId;
+    callbacks[requestId].functionId = _callbackFunctionId;
     callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME)); // solhint-disable-line not-rely-on-time
-
-    require(matchesFunctionSelector(
-              a.aggInitArgs,
-              serviceAgreements[_sAId].aggInitiateRequestSelector),
-            "must call agg initiator");
-    // solhint-disable-next-line avoid-low-level-calls
-    (bool success,) = address(serviceAgreements[_sAId].aggregator).call(
-      a.aggInitArgs);
-    require(success, "aggregation initiation failed");
 
     emit OracleRequest(
       _sAId,
-      a.sender,
+      _sender,
       requestId,
-      _payment,
+      _amount,
       _callbackAddress,
-      a.callbackFunctionId,
+      _callbackFunctionId,
       now.add(EXPIRY_TIME), // solhint-disable-line not-rely-on-time
-      a.dataVersion,
-      a.data);
+      _dataVersion,
+      _data);
   }
 
-  /* */
-
-  /** **************************************************************************
+  /**
    * @notice Stores a Service Agreement which has been signed by the given oracles
-   *
    * @dev Validates that each oracle has a valid signature.
-   *      Emits NewServiceAgreement event.
-   *      Initiates the job on the aggregator for the service agreement.
-   *
+   * Emits NewServiceAgreement event.
    * @param _agreement The Service Agreement to be initiated
    * @param _signatures The signatures of the oracles in the agreement
    * @return The Service Agreement ID
-   ****************************************************************************/
+   */
   function initiateServiceAgreement(
     ServiceAgreement memory _agreement,
     OracleSignatures memory _signatures
@@ -147,7 +131,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       "Must pass in as many signatures as oracles"
     );
      // solhint-disable-next-line not-rely-on-time
-    require(_agreement.endAt > block.timestamp, "ServiceAgreement must end later");
+    require(_agreement.endAt > block.timestamp, "End of ServiceAgreement must be in the future");
 
     serviceAgreementID = getId(_agreement);
 
@@ -156,8 +140,6 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       _agreement.oracles,
       _signatures
     );
-
-    initiateAggregatorForJob(serviceAgreementID, _agreement);
 
     serviceAgreements[serviceAgreementID] = _agreement;
     emit NewServiceAgreement(serviceAgreementID, _agreement.requestDigest);
@@ -217,173 +199,34 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     _;
   }
 
-  /** **************************************************************************
-   * @notice Calls aggregator job initiator
-   *
-   * @param _sAId Tag representing the _sa
-   * @param _sa ServiceAgreement describing the job to initiate
-   *
-   * @dev XXX: Perhaps instead of sending the full SA over, could just send the
-   *           _sAId, and let the aggregator look it up on this contract?
-   ****************************************************************************/
-  function initiateAggregatorForJob(bytes32 _sAId, ServiceAgreement memory _sa) internal {
-    // TODO(alx): It should be possible to pull this encoding out of the
-    // calldata, which would be more efficient.
-    bytes memory rawEncoding = abi.encode(_sa);
-    bytes memory initCall = abi.encodePacked(_sa.aggInitiateJobSelector, _sAId, rawEncoding);
-    // solhint-disable-next-line avoid-low-level-calls
-    (bool success,) = address(_sa.aggregator).call(initCall);
-    require(success, "job aggregation init failed");
-  }
-
-  /** **************************************************************************
+  /**
    * @notice Called by the Chainlink node to fulfill requests
-   *
-   * @dev Response must have a valid callback, and will delete the associated
-   *      callback storage before calling the external contract.
-   *
-   * @param _requestId Fulfillment request ID, that must match the requester's
-   * @param _aggregatorArgs The binary call data to send to the aggregator.
-   *
-   * @return True iff the external call to aggregator was successful
-   ****************************************************************************/
+   * @dev Response must have a valid callback, and will delete the associated callback storage
+   * before calling the external contract.
+   * @param _requestId The fulfillment request ID that must match the requester's
+   * @param _data The data to return to the consuming contract
+   * @return Status if the external call was successful
+   */
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes calldata _aggregatorArgs
+    bytes32 _data
   )
     external
-    isValidRequest(_requestId, _aggregatorArgs)
+    isValidRequest(_requestId)
     returns (bool)
   {
-    (bool complete, bytes memory report) = callAggregator(_requestId, _aggregatorArgs);
-    registerOracleResponse(_requestId);
-    if (complete) {
-      Callback memory callback = callbacks[_requestId];
-      bytes memory consumerArgs = abi.encodePacked(callback.functionId, _requestId, report);
-      // solhint-disable-next-line avoid-low-level-calls
-      (bool consumerSuccess,) = callbacks[_requestId].addr.call(consumerArgs);
-      deleteCallback(_requestId);
-      return consumerSuccess;
-    }
-    return true;
-  }
+    storeResponse(_requestId, _data);
 
-  /** **************************************************************************
-   * @notice Send oracle response to aggregator
-   * @param _requestId Tag identifying request oracle responded to
-   * @param _aggregatorArgs oracle's response, as raw bytes to be sent to the
-   *        aggregator as a method call
-   * @return true iff the aggregator has enough information to
-   * @dev reverts if call to aggregator reverts, or _aggregatorArgs was invalid
-   ****************************************************************************/
-  function callAggregator(bytes32 _requestId, bytes memory _aggregatorArgs)
-    private returns (bool complete, bytes memory aggregatorReport)
-  {
     Callback memory callback = callbacks[_requestId];
-    ServiceAgreement storage sa = serviceAgreements[callback.sAId];
-    bool success;
+    address[] memory oracles = serviceAgreements[callback.sAId].oracles;
+    if (oracles.length != callback.responseCount) {
+      return true; // exit early if not all response have been received
+    }
+
+    uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
     // solhint-disable-next-line avoid-low-level-calls
-    (success, aggregatorReport) = address(sa.aggregator).call(
-      _aggregatorArgs);
-    require(success, "aggregator failed");
-    bool valid;
-    bytes memory response;
-    (valid, complete, response) = parseAggregatorResponse(aggregatorReport);
-    require(valid, "invalid oracle report");
-  }
-
-  /** **************************************************************************
-   * @param _args Raw bytes for arguments to a method call
-   * @param _selector Low-level specification of method _args is calling
-   * @return true iff first four bytes of _args match _selector
-   ****************************************************************************/
-  function matchesFunctionSelector(bytes memory _args, bytes4 _selector)
-    public pure returns (bool)
-  {
-    bytes4 prefix;
-    assembly { // solhint-disable-line no-inline-assembly
-      // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
-      // Layout of (bytes4 prefix): <28 zeroes><byte><byte><byte><byte>
-      //
-      // Since a bytes4 is represented as the lower 32 bits of a bytes32, we
-      // only offset by 4 to extract the first 4 bytes. This picks up part of
-      // the length word at the head of _args, but that's in the higher bytes.
-      prefix := add(_args, 4)
-    }
-    return ((_args.length >= 4) && (prefix == _selector));
-  }
-
-  /** **************************************************************************
-   * @param _args Raw bytes for arguments to a method call
-   * @param _arg Expected bytes32 in _args
-   * @param _offset Where the _arg is expected in the _args
-   * @return true iff _args at the given _offset matches _arg
-   ****************************************************************************/
-  function matchesBytes32Arg(bytes memory _args, bytes32 _arg, uint256 _offset)
-    public pure returns (bool)
-  {
-    bytes32 arg;
-    // For some reason, can't see _offset in assembly block
-    uint256 offset = _offset;
-    assembly { // solhint-disable-line no-inline-assembly
-      // Layout of (bytes _args): <uint256 lengthOfArgs><byte><byte>...</byte>
-      // Layout of (bytes32 arg): <byte><byte><byte>...<byte>
-      //
-      // So point prefix at the memory location just after the length, plus the _offset
-      arg := add(add(_args, 0x20), mload(offset))
-    }
-    return ((_args.length >= 0x20) && (_arg == arg));
-  }
-
-  /** **************************************************************************
-   * @notice Parses the _response from aggregator fulfill method.
-   * @dev Overwrites the bytes it's passed
-   * @return
-   *   valid: Whether the oracle arguments were valid
-   *   complete: Whether the aggregator has enough responses to constuct summary
-   *   consumerArgs: Raw bytes to pass to consumer, if complete
-   ****************************************************************************/
-  function parseAggregatorResponse(bytes memory _response)
-    private pure returns (bool valid, bool complete, bytes memory consumerArgs)
-  {
-    uint256 actualResponseLength = _response.length - 64;
-    assembly { // solhint-disable-line no-inline-assembly
-      // First argument in response is (bool valid). Skip length in first word
-      mstore(valid, mload(add(_response, 0x20)))
-      // Second argument is (bool complete). It will be overwritten with the
-      // length of the actual response, so a copy must be taken.
-      let completeAddr := add(_response, 0x40)
-      mstore(complete, mload(completeAddr))
-      // Rewrite completeAddr with the uint256 length of the remaining bytes.
-      // completeAddr is therefore the consumerArgs.
-      mstore(completeAddr, mload(actualResponseLength))
-      consumerArgs := completeAddr
-    }
-    assert(consumerArgs.length == actualResponseLength);
-  }
-
-  /** **************************************************************************
-   * @notice Register correct response for _requestId from msg.sender
-   ****************************************************************************/
-  function registerOracleResponse(bytes32 _requestId) private {
-    Callback storage callback = callbacks[_requestId];
-    withdrawableTokens[msg.sender] = withdrawableTokens[msg.sender].add(
-      callback.amount);
-    callback.responded[msg.sender] = true;
-    callback.responseCount += 1;
-  }
-
-  /** **************************************************************************
-   * @notice remove callback data associated to _requestId
-   * @dev only oracles involved in the service agreement can delete it
-   ****************************************************************************/
-  function deleteCallback(bytes32 _requestId) private {
-    ServiceAgreement memory sa = serviceAgreements[callbacks[_requestId].sAId];
-    // delete response records explicitly, since `delete` won't recurse into mappings
-    for (uint256 oidx = 0; oidx < sa.oracles.length; oidx++) {
-      delete callbacks[_requestId].responded[sa.oracles[oidx]];
-    }
-    delete callbacks[_requestId];
+    (bool success,) = callback.addr.call(abi.encodePacked(callback.functionId, _requestId, result));
+    return success;
   }
 
   /**
@@ -454,6 +297,39 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
   }
 
   /**
+   * @dev Stores an oracle's response and then increments the total number of repsonse received.
+   * @param _requestId is the unique identifier generated by the requester and their nonce
+   * @param _data is the actual answer to a request submitted by an oracle node
+   */
+  function storeResponse(bytes32 _requestId, bytes32 _data) private {
+    callbacks[_requestId].responses[msg.sender] = uint256(_data);
+    callbacks[_requestId].responseCount += 1;
+  }
+
+  /**
+   * @dev Aggregates the responses in storage and cleans them up.
+   * Then pays associated oracles their share of LINK.
+   * Deletes the request's callback record, and finally returns the aggregated result.
+   * @param _requestId is the unique identifier generated by the requester and their nonce
+   * @param _paymentAmount is the amount of LINK shared between the oracles
+   * @param _oracles is the list of oracle addresses
+   */
+  function aggregateAndPay(bytes32 _requestId, uint256 _paymentAmount, address[] memory _oracles) private returns (uint256) {
+    uint256 sumQuotients;
+    uint256 sumRemainders;
+    uint256 oraclePayment = _paymentAmount.div(_oracles.length);
+    for (uint i = 0; i < _oracles.length; i++) {
+      uint256 response = callbacks[_requestId].responses[_oracles[i]];
+      sumQuotients = sumQuotients.add(response.div(_oracles.length)); // aggregate responses and protect from overflows
+      sumRemainders = sumRemainders.add(response % _oracles.length);
+      delete callbacks[_requestId].responses[_oracles[i]]; // must explicitly clean-up mappings for gas refund
+      withdrawableTokens[_oracles[i]] = withdrawableTokens[_oracles[i]].add(oraclePayment);
+    }
+    delete callbacks[_requestId];
+    return sumQuotients.add(sumRemainders.div(_oracles.length)); // recover lost accuracy from result
+  }
+
+  /**
    * @dev Reverts if the callback address is the LINK token
    * @param _to The callback address
    */
@@ -471,22 +347,14 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     _;
   }
 
-  /** **************************************************************************
-   * @dev Reverts if oracle response is invalid, given _requestId
+  /**
+   * @dev Reverts if request ID does not exist
    * @param _requestId The given request ID to check in stored `callbacks`
-   ****************************************************************************/
-  modifier isValidRequest(bytes32 _requestId, bytes memory _aggregatorArgs) {
-    Callback storage callback = callbacks[_requestId];
-    require(callback.addr != address(0), "Must have a valid requestId");
-    require(allowedOracles[callback.sAId][msg.sender],
-            "respondant not part of svc agrmnt");
-    require(!callback.responded[msg.sender], "oracle already reported");
-    ServiceAgreement storage sa = serviceAgreements[callback.sAId];
-    require(matchesFunctionSelector(_aggregatorArgs, sa.aggFulfillSelector),
-            "call aggregator fulfill method");
-    // First argument (past the function selector) must be the requestId
-    require(matchesBytes32Arg(_aggregatorArgs, _requestId, 4),
-            "pass requestId to aggregator");
+   */
+  modifier isValidRequest(bytes32 _requestId) {
+    require(callbacks[_requestId].addr != address(0), "Must have a valid requestId");
+    require(callbacks[_requestId].responses[msg.sender] == 0, "Cannot respond twice");
+    require(allowedOracles[callbacks[_requestId].sAId][msg.sender], "Oracle not recognized on service agreement");
     _;
   }
 
@@ -508,8 +376,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
     assembly { // solhint-disable-line no-inline-assembly
       calldatacopy(funcSelector, 132, 4) // grab function selector from calldata
     }
-    require(funcSelector[0] == this.oracleRequest.selector,
-            "Must use whitelisted functions"); // XXX: Turn this back on!
+    require(funcSelector[0] == this.oracleRequest.selector, "Must use whitelisted functions");
     _;
   }
 }

@@ -2,10 +2,14 @@ pragma solidity ^0.5.0;
 
 interface ChainlinkRequestInterface {
   function oracleRequest(
-    uint256 payment,
-    bytes32 serviceAgreementId,
-    address callbackAddress,
-    bytes calldata otherArgs // Contains an OracleRequestArgs
+    address _sender,
+    uint256 _amount,
+    bytes32 _sAId,
+    address _callbackAddress,
+    bytes4 _callbackFunctionId,
+    uint256 _nonce,
+    uint256 _dataVersion,
+    bytes calldata _data
   ) external;
 
   function cancelOracleRequest(
