@@ -139,6 +139,7 @@ export const toHexWithoutPrefix = (arg: any): string => {
   } else if (Number(arg) === arg) {
     return arg.toString(16).padStart(64, '0')
   } else {
+    assert.equal(typeof arg, 'string', `Don't know how to convert ${arg} to hex`)
     return Buffer.from(arg, 'ascii').toString('hex')
   }
 }
