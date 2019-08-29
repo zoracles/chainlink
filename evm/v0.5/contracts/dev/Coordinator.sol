@@ -91,11 +91,16 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
     require(callbacks[requestId].cancelExpiration == 0, "Must use a unique ID");
 
+    ServiceAgreement memory sA = serviceAgreements[_sAId];
+    require(uint256(sA.requestDigest) != 0,
+            "Must reference an existing ServiceAgreement");
     callbacks[requestId].sAId = _sAId;
     callbacks[requestId].amount = _amount;
     callbacks[requestId].addr = _callbackAddress;
     callbacks[requestId].functionId = _callbackFunctionId;
-    callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME)); // solhint-disable-line not-rely-on-time
+    // solhint-disable-next-line not-rely-on-time
+    callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME));
+    
 
     emit OracleRequest(
       _sAId,
@@ -266,8 +271,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
       mstore(add(_data, 68), _amount)    // ensure correct amount is passed
     }
     // solhint-disable-next-line avoid-low-level-calls
-    (bool success,) = address(this).delegatecall(_data);
-    require(success, "Unable to create request"); // calls oracleRequest
+    (bool success,) = address(this).delegatecall(_data); // calls oracleRequest
+    require(success, "Unable to create request");
   }
 
   /**
