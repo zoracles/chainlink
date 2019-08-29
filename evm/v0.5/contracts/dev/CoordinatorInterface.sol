@@ -10,11 +10,9 @@ contract AggregatorInterface {
   // must be primitive types. It should return a bool, followed by the summary
   // data. The bool should indicate whether enough reports have been made, and
   // the summary data should be empty unless the bool is true. This method
-  // corresponds to the aggFulfillSelector on the ServiceAgreement struc.t
-  //
-  // For `initiateRequest`, the first two arguments should be the bytes32 _sAId
-  // and the _requestId. It should not return anything. This method corresponds
-  // to the aggInitiateRequestSelector on the ServiceAgreement struct.
+  // corresponds to the aggFulfillSelector on the ServiceAgreement struct. If
+  // the _requestId is not present on the aggregator, `fulfill` is responsible
+  // for initializing whatever data structures
   //
   // For `initiateAggregatorForJob`, the first argument should be the
   // ServiceAgreement describing the job. It should not return anything. This
@@ -23,6 +21,9 @@ contract AggregatorInterface {
   //
   // This comment should be replaced with an explicit constraint in an
   // interface, if solidity ever evolves to allow that.
+  //
+  // XXX: We should have a getter on the Aggregator for the ServiceAgreement
+  // attributes.
   //
   //////////////////////////////////////////////////////////////////////////////
   // XXX: A nontrivial cancellation may be worthwhile, for when there's a lot of
@@ -68,6 +69,6 @@ contract CoordinatorInterface {
 
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes32 _aggregatorArgs)
+    bytes memory _aggregatorArgs)
     external returns (bool);
 }

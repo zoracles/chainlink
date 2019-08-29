@@ -4,11 +4,12 @@ pragma experimental ABIEncoderV2;
 import "./CoordinatorInterface.sol";
 // import "../Oracle.sol";
 /* is AggregatorInterface */
-contract MeanAggregator is CoordinatorInterface, AggregatorInterface {
+contract MeanAggregator is AggregatorInterface {
 
   // true iff address is authorized to make calls on this aggregator
   mapping(address => bool) knownCoordinators;
-  mapping(/* saId */ bytes32 => ServiceAgreement) serviceAgreements; 
+  mapping(/* saId */ bytes32 => CoordinatorInterface.ServiceAgreement)
+    serviceAgreements;
 
   // TODO(alx): Use a running average of the observations, instead. Keeping the
   // values contained in uint256's is tricky, but ought to be possible by
@@ -56,7 +57,10 @@ contract MeanAggregator is CoordinatorInterface, AggregatorInterface {
    * XXX: This depends on ABIEncoderV2 doing the right thing, when using a
    *      struct in multiple contexts...
    ****************************************************************************/
-  function initiateJob(bytes32 _saId, ServiceAgreement memory _sa)
+  function initiateJob(
+    bytes32 _saId,
+    CoordinatorInterface.ServiceAgreement memory _sa
+  )
     public senderKnownCoordinator
   {
     serviceAgreements[_saId] = _sa;

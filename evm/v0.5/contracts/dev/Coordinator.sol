@@ -209,19 +209,16 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    */
   function fulfillOracleRequest(
     bytes32 _requestId,
-    bytes32 _data
+    bytes memory _data
   )
     external
     isValidRequest(_requestId)
     returns (bool)
   {
-    storeResponse(_requestId, _data);
-
     Callback memory callback = callbacks[_requestId];
-    address[] memory oracles = serviceAgreements[callback.sAId].oracles;
-    if (oracles.length != callback.responseCount) {
-      return true; // exit early if not all response have been received
-    }
+    ServiceAgreement memory sA = serviceAgreements[callback.sAId];
+
+    
 
     uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
     // solhint-disable-next-line avoid-low-level-calls

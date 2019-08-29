@@ -1,16 +1,35 @@
 import * as h from './support/helpers'
 import { assertBigNum } from './support/matchers'
 const Coordinator = artifacts.require('dev/Coordinator.sol')
+const Aggregator = artifacts.require('dev/MeanAggregator.sol')
 const GetterSetter = artifacts.require('GetterSetter.sol')
 const MaliciousConsumer = artifacts.require('MaliciousConsumer.sol')
 const MaliciousRequester = artifacts.require('MaliciousRequester.sol')
 
+const aggInitiateJobSelector = h.functionSelector(
+  'initiateJob(bytes32,tuple(uint256,uint256,uint256,address[],bytes32,address,bytes4,bytes4,bytes4))'
+)
+const aggInitiateRequestSelector = h.functionSelector(
+  'initiateRequest(bytes32,bytes32,uint32)'
+)
+const aggFulfillSelector = h.functionSelector('fulfill(bytes32,address,uint256[])')
+
 contract('Coordinator', () => {
-  let coordinator, link
+  let coordinator, link, newServiceAgreement
 
   beforeEach(async () => {
     link = await h.linkContract()
     coordinator = await Coordinator.new(link.address)
+    const aggregator = await Aggregator.new([coordinator.address])
+    // XXX: There should be a way to do this from the contract ABI using web3/truffle
+    const partialServiceAgreement = {
+      aggregator: aggregator.address,
+      aggInitiateJobSelector,
+      aggInitiateRequestSelector,
+      aggFulfillSelector
+    }
+    newServiceAgreement = async sA =>
+      h.newServiceAgreement({ ...partialServiceAgreement, ...sA })
   })
 
   it('has a limited public interface', () => {
@@ -31,7 +50,7 @@ contract('Coordinator', () => {
   describe('#getId', async () => {
     let sA, expectedBinaryArgs
     beforeEach(async () => {
-      sA = await h.newServiceAgreement({
+      sA = await newServiceAgreement({
         payment: 1,
         expiration: 2,
         requestDigest:
@@ -50,7 +69,7 @@ contract('Coordinator', () => {
   describe('#initiateServiceAgreement', () => {
     let agreement
     before(async () => {
-      agreement = await h.newServiceAgreement({ oracles: [h.oracleNode] })
+      agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
     })
 
     context('with valid oracle signatures', () => {
@@ -115,7 +134,7 @@ contract('Coordinator', () => {
     const to = '0x80e29acb842498fe6591f020bd82766dce619d43'
     let agreement
     before(async () => {
-      agreement = await h.newServiceAgreement({ oracles: [h.oracleNode] })
+      agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
     })
 
     beforeEach(async () => {
@@ -223,7 +242,7 @@ contract('Coordinator', () => {
   describe('#fulfillOracleRequest', () => {
     let agreement, mock, request
     beforeEach(async () => {
-      agreement = await h.newServiceAgreement({ oracles: [h.oracleNode] })
+      agreement = await newServiceAgreement({ oracles: [h.oracleNode] })
       const tx = await h.initiateServiceAgreement(coordinator, agreement)
       assert.equal(tx.logs[0].args.said, agreement.id)
     })
@@ -489,7 +508,7 @@ contract('Coordinator', () => {
         oracle2 = h.oracleNode2
         oracle3 = h.oracleNode3
 
-        agreement = await h.newServiceAgreement({
+        agreement = await newServiceAgreement({
           oracles: [oracle1, oracle2, oracle3]
         })
         let tx = await h.initiateServiceAgreement(coordinator, agreement)
@@ -643,7 +662,7 @@ contract('Coordinator', () => {
         oracle2 = h.oracleNode2
         oracle3 = h.oracleNode3
 
-        agreement = await h.newServiceAgreement({
+        agreement = await newServiceAgreement({
           oracles: [oracle1, oracle2, oracle3]
         })
         let tx = await h.initiateServiceAgreement(coordinator, agreement)
@@ -697,7 +716,7 @@ contract('Coordinator', () => {
         oracle2 = h.oracleNode2
         oracle3 = h.oracleNode3
 
-        agreement = await h.newServiceAgreement({
+        agreement = await newServiceAgreement({
           oracles: [oracle1, oracle2, oracle3]
         })
         let tx = await h.initiateServiceAgreement(coordinator, agreement)
