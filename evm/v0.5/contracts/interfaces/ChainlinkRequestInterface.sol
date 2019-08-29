@@ -5,7 +5,7 @@ interface ChainlinkRequestInterface {
     uint256 payment,
     bytes32 serviceAgreementId,
     address callbackAddress,
-    bytes otherArgs // Contains an OracleRequestArgs
+    bytes calldata otherArgs // Contains an OracleRequestArgs
   ) external;
 
   function cancelOracleRequest(

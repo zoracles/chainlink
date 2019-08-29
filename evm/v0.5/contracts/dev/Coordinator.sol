@@ -147,7 +147,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       "Must pass in as many signatures as oracles"
     );
      // solhint-disable-next-line not-rely-on-time
-    require(_agreement.endAt > block.timestamp, "End of ServiceAgreement must be in the future");
+    require(_agreement.endAt > block.timestamp, "ServiceAgreement must end later");
 
     serviceAgreementID = getId(_agreement);
 
@@ -445,7 +445,11 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
         _agreement.expiration,
         _agreement.endAt,
         _agreement.oracles,
-        _agreement.requestDigest
+        _agreement.requestDigest,
+        _agreement.aggregator,
+        _agreement.aggInitiateJobSelector,
+        _agreement.aggInitiateRequestSelector,
+        _agreement.aggFulfillSelector
     ));
   }
 
@@ -505,7 +509,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface, Ownable
       calldatacopy(funcSelector, 132, 4) // grab function selector from calldata
     }
     require(funcSelector[0] == this.oracleRequest.selector,
-            "Must use whitelisted functions"); XXX: Turn this back on!
+            "Must use whitelisted functions"); // XXX: Turn this back on!
     _;
   }
 }

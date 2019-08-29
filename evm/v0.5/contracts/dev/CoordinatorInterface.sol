@@ -37,9 +37,16 @@ contract CoordinatorInterface {
     uint256 expiration;
     uint256 endAt;
     address[] oracles;
-    bytes32 requestDigest;
-    // See ./Aggregate.sol for an example
-    AggregatorInterface aggregator;
+    // This effectively functions as an ID tag for the service agreement. It is
+    // calculated as the keccak256 hash of the normalized JSON request to create
+    // the ServiceAgreement, but that identity is unused.
+    bytes32 requestDigest; 
+
+    // Specification of aggregator interface. See ./Aggregate.sol for an example
+    AggregatorInterface aggregator; 
+    // Selectors for the interface methods must be specified, because their
+    // arguments are arbitrary.
+    //
     // Function selector for aggregator initiateJob method
     bytes4 aggInitiateJobSelector;
     // Function selector for aggregator initiateRequest method
