@@ -226,10 +226,18 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     storeResponse(_requestId, _data);
 
     Callback memory callback = callbacks[_requestId];
-    address[] memory oracles = serviceAgreements[callback.sAId].oracles;
+    ServiceAgreement memory sA = serviceAgreements[callback.sAId];
+    address[] memory oracles = sA.oracles;
     if (oracles.length != callback.responseCount) {
       return true; // exit early if not all response have been received
     }
+
+    uint256[] memory responseData = new uint256[](1);
+    responseData[0] = uint256(_data);
+    (bool ok,) = sA.aggregator.call(
+      abi.encodeWithSelector(
+        sA.aggFulfillSelector, _requestId, msg.sender, responseData));
+    require(ok, "aggregator.fulfill failed");
 
     uint256 result = aggregateAndPay(_requestId, callback.amount, oracles);
     // solhint-disable-next-line avoid-low-level-calls

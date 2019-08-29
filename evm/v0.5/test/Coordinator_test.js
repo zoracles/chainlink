@@ -299,9 +299,9 @@ contract('Coordinator', () => {
           const event = await h.getLatestEvent(aggregator)
 
           assert(event, 'event was expected')
-          assert.equal('Fulfillled', event.event)
-          assert.equal(request.id, event.requestId)
-          assert.equal(h.oracleNode.address, event.sender)
+          assert.equal('Fulfilled', event.event)
+          assert.equal(h.toHex(request.id), event.args.requestId)
+          assert.equal(h.oracleNode, event.args.sender)
         })
 
         it('sets the value on the requested contract', async () => {
