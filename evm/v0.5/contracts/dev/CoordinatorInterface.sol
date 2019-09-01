@@ -1,36 +1,6 @@
 pragma solidity 0.5.0;
 pragma experimental ABIEncoderV2;
 
-// Contracts responsible for aggregating multi-oracle results inherit from this.
-contract AggregatorInterface {
-  // Has an `initiateRequest` and a `fulfill` method.
-  //
-  // For `fulfill`, the first argument must be a bytes32 for the _requestId, the
-  // second the address for the reporting oracle, and the subsequent arguments
-  // must be primitive types. It should return a bool, followed by the summary
-  // data. The bool should indicate whether enough reports have been made, and
-  // the summary data should be empty unless the bool is true. This method
-  // corresponds to the aggFulfillSelector on the ServiceAgreement struct. If
-  // the _requestId is not present on the aggregator, `fulfill` is responsible
-  // for initializing whatever data structures
-  //
-  // For `initiateAggregatorForJob`, the first argument should be the
-  // ServiceAgreement describing the job. It should not return anything. This
-  // method corresponds to the aggInitiateJobSelector on the ServiceAgreement
-  // struct.
-  //
-  // This comment should be replaced with an explicit constraint in an
-  // interface, if solidity ever evolves to allow that.
-  //
-  // XXX: We should have a getter on the Aggregator for the ServiceAgreement
-  // attributes.
-  //
-  //////////////////////////////////////////////////////////////////////////////
-  // XXX: A nontrivial cancellation may be worthwhile, for when there's a lot of
-  //      data associated with a job. Might want a method for that, too.
-  //////////////////////////////////////////////////////////////////////////////
-}
-
 contract CoordinatorInterface {
 
   struct ServiceAgreement {
@@ -71,4 +41,7 @@ contract CoordinatorInterface {
     bytes32 _requestId,
     bytes32 _aggregatorArgs)
     external returns (bool);
+
+  function getId(ServiceAgreement memory _agreement)
+    public pure returns (bytes32);
 }

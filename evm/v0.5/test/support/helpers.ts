@@ -183,15 +183,20 @@ export const requestDataFrom = (
   return link.transferAndCall(oc.address, amount, args, options)
 }
 
+// ABI specification for the given method on the given contract
+export const getMethod = (contract: TruffleContract, methodName: string): FunctionFragment => {
+  const methodABIs = contract.abi.filter(
+    ({ name: attrName }: FunctionFragment) => attrName == methodName
+  )
+  const fqName = `${contract.contractName}.${methodName}: ${methodABIs}`
+  assert.equal(methodABIs.length, 1, `No method ${fqName}, or ambiguous`)
+  return methodABIs[0]
+}
+
 export const functionSelector = web3.eth.abi.encodeFunctionSignature
 
-export const functionSelectorFromAbi = (contract: TruffleContract, name: string): string => {
-  for (const method of contract.abi) {
-    if (method.name == name) {
-      return functionSelector(method)
-    }
-  }
-}
+export const functionSelectorFromAbi = (contract: TruffleContract, name: string): string => 
+  functionSelector(getMethod(contract, name))
 
 export const assertActionThrows = (action: any) =>
   Promise.resolve()
@@ -567,16 +572,6 @@ export const constructStructArgs = (
   return args
 }
 
-// ABI specification for the given method on the given contract
-const getMethod = (contract: TruffleContract, methodName: string): FunctionFragment => {
-  const methodABIs = contract.abi.filter(
-    ({ name: attrName }: FunctionFragment) => attrName == methodName
-  )
-  const fqName = `${contract.contractName}.${methodName}: ${methodABIs}`
-  assert.equal(methodABIs.length, 1, `No method ${fqName}, or ambiguous`)
-  return methodABIs[0]
-}
-
 // ABI specification for the given argument of the given contract method
 const getMethodArg = (
   contract: any,
@@ -639,11 +634,8 @@ export const initiateServiceAgreementCall = async (
 export const initiateServiceAgreement = async (
   coordinator: TruffleContract,
   serviceAgreement: ServiceAgreement
-) => {
-  return await coordinator.initiateServiceAgreement(
-  ...initiateServiceAgreementArgs(coordinator, serviceAgreement)
-  )
-}
+) => coordinator.initiateServiceAgreement(
+  ...initiateServiceAgreementArgs(coordinator, serviceAgreement))
 
 /** Check that the given service agreement was stored at the correct location */
 export const checkServiceAgreementPresent = async (
