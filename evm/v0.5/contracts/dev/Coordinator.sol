@@ -98,7 +98,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     callbacks[requestId].addr = _callbackAddress;
     callbacks[requestId].functionId = _callbackFunctionId;
     // solhint-disable-next-line not-rely-on-time
-    callbacks[requestId].cancelExpiration = 0;
+    callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME));
 
     emit Seen();
 
