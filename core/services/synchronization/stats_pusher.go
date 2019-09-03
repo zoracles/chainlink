@@ -3,6 +3,7 @@ package synchronization
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"sync"
 	"time"
@@ -127,11 +128,13 @@ func (sp *StatsPusher) pusherLoop(parentCtx context.Context) error {
 	for {
 		select {
 		case <-sp.waker:
+			fmt.Println("777777777777777777777777777 1")
 			err := sp.pushEvents()
 			if err != nil {
 				return err
 			}
 		case <-sp.clock.After(sp.Period):
+			fmt.Println("777777777777777777777777777 2")
 			err := sp.pushEvents()
 			if err != nil {
 				return err
@@ -158,9 +161,11 @@ func (sp *StatsPusher) pushEvents() error {
 }
 
 func (sp *StatsPusher) syncEvent(event *models.SyncEvent) error {
+	fmt.Println("TTTTTTTTTTTTTTTTTTTTTTTTTTTT 1")
 	sp.WSClient.Send([]byte(event.Body))
 
 	message, err := sp.WSClient.Receive()
+	fmt.Println("TTTTTTTTTTTTTTTTTTTTTTTTTTTT 2")
 	if err != nil {
 		return errors.Wrap(err, "syncEvent#WSClient.Receive failed")
 	}

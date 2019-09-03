@@ -1,6 +1,7 @@
 package cltest
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -103,6 +104,7 @@ func (wss *EventWebSocketServer) handler(w http.ResponseWriter, r *http.Request)
 
 		select {
 		case wss.Received <- string(payload):
+			fmt.Println("&&&&&&&&&&&&&&&&&&&&&", string(payload))
 		default:
 		}
 	}
