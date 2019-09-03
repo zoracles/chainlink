@@ -526,8 +526,8 @@ export const personalSign = async (
 
 export const executeServiceAgreementBytes = (
   sAID: any,
-  to: any,
-  fHash: any,
+  callbackAddr: any,
+  callbackFunctionId: any,
   nonce: any,
   data: any
 ): any => {
@@ -541,7 +541,7 @@ export const executeServiceAgreementBytes = (
     'uint256',
     'bytes'
   ]
-  const values = [0, 0, sAID, to, fHash, nonce, 1, data]
+  const values = [0, 0, sAID, callbackAddr, callbackFunctionId, nonce, 1, data]
   const encoded = abiEncode(types, values)
   const funcSelector = functionSelector(
     'oracleRequest(address,uint256,bytes32,address,bytes4,uint256,uint256,bytes)'
@@ -681,8 +681,6 @@ export const newServiceAgreement = async (
     '0xbadc0de5badc0de5badc0de5badc0de5badc0de5badc0de5badc0de5badc0de5'
   agreement.aggregator = params.aggregator || '0x3141592653589793238462643383279502884197'
   agreement.aggInitiateJobSelector = params.aggInitiateJobSelector || '0x12345678'
-  agreement.aggInitiateRequestSelector =
-    params.aggInitiateRequestSelector || '0x9abcdef0'
   agreement.aggFulfillSelector = params.aggFulfillSelector || '0x87654321'
   const sAID = calculateSAID(agreement as ServiceAgreement)
   agreement.id = toHex(sAID)

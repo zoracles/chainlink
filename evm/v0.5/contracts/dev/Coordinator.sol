@@ -60,7 +60,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     bytes32 internalId
   );
 
-  event Seen();
+  event Seen(bytes32 requestId, bytes32 sAId);
 
   /**
    * @notice Creates the Chainlink request
@@ -91,7 +91,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     //checkServiceAgreementPresence(_sAId)
     checkCallbackAddress(_callbackAddress)
   {
-    bytes32 requestId = keccak256(abi.encodePacked(_sender, _nonce));
+    /* XXX: Changed the requestId. Will this require a database migration? */
+    bytes32 requestId = keccak256(abi.encodePacked(_sender, _sAId, _nonce));
     require(callbacks[requestId].cancelExpiration == 0, "Must use a unique ID");
     callbacks[requestId].sAId = _sAId;
     callbacks[requestId].amount = _amount;
@@ -99,8 +100,6 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     callbacks[requestId].functionId = _callbackFunctionId;
     // solhint-disable-next-line not-rely-on-time
     callbacks[requestId].cancelExpiration = uint64(now.add(EXPIRY_TIME));
-
-    emit Seen();
 
     emit OracleRequest(
       _sAId,

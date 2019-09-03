@@ -335,7 +335,7 @@ contract('Coordinator', () => {
             meanServiceAgreement
           )
           const payload = h.executeServiceAgreementBytes(
-            agreement.id,
+            meanServiceAgreement.id,
             mock.address,
             fHash,
             1,
@@ -347,7 +347,7 @@ contract('Coordinator', () => {
             payload,
             { value: 0 }
           )
-          const meanRequest = h.decodeRunRequest(tx.receipt.rawLogs[2])
+          const meanRequest = h.decodeRunRequest(meanTx.receipt.rawLogs[2])
           await coordinator.fulfillOracleRequest(
             meanRequest.id,
             h.toHex('First message!'),
