@@ -95,6 +95,10 @@ contract('BasicConsumer', () => {
 
       beforeEach(async () => {
         const funcSig = h.functionSelector('fulfill(bytes32,bytes32)')
+        // Create a request directly via the oracle, rather than through the
+        // chainlink client (consumer). The client should not respond to
+        // fulfillment of this request, even though the oracle will faithfully
+        // forward the fulfillment to it.
         const args = h.requestDataBytes(
           h.toHex(specId),
           cc.address,
@@ -107,9 +111,6 @@ contract('BasicConsumer', () => {
       })
 
       it('does not accept the data provided', async () => {
-        // XXX: How is this test supposed to work? A valid request with
-        // otherRequest's ID was made in the beforeEach!
-        otherRequest.id = web3.utils.randomHex(32) // XXX: Overwriting the valid requestId
         await h.fulfillOracleRequest(oc, otherRequest, response, {
           from: h.oracleNode
         })

@@ -548,7 +548,6 @@ contract('Coordinator', () => {
           h.toHex(17),
           { from: oracle1 }
         )
-
         assert.equal(tx.receipt.rawLogs.length, 0) // No logs emitted = consuming contract not called
       })
 

@@ -32,12 +32,9 @@ contract MeanAggregator {
     success = true;
   }
 
-  event Fulfillment(bytes32 requestId, bytes32 value);
-
   function fulfill(bytes32 _requestId, bytes32 _sAId, address _oracle,
                    bytes32 _value)
     public returns (bool success, bool complete, bytes memory response) {
-    emit Fulfillment(_requestId, _value);
     if (reported[_requestId][_oracle]) {
       return (false, false, "oracle already reported");
     }
@@ -53,7 +50,6 @@ contract MeanAggregator {
     reported[_requestId][_oracle] = true;
     complete = (numberReported[_requestId] == numOracles[_sAId]);
     if (complete) {
-      emit Fulfillment(bytes32(0), bytes32(average[_requestId]));
       response = abi.encode(average[_requestId]);
     }
   }
