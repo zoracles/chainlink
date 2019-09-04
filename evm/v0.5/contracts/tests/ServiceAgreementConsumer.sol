@@ -26,5 +26,6 @@ contract ServiceAgreementConsumer is ChainlinkClient {
     recordChainlinkFulfillment(_requestId)
   {
     currentPrice = _price;
+
   }
 }

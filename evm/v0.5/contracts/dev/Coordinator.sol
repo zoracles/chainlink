@@ -158,8 +158,13 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
       )
     );
     require(ok, "Aggregator failed to initiate Service Agreement");
+    require(response.length > 0, "probably wrong address/selector");
     (bool success, bytes memory message) = abi.decode(response, (bool, bytes));
-    require(success, /* string(message) */ "foo");
+    if ((!success) && message.length == 0) {
+      // Revert with a non-empty message to give user a hint where to look
+      require(success, "initiation failed; empty message"); 
+    }
+    require(success, string(message));
   }
   /**
    * @dev Validates that each signer address matches for the given oracles
@@ -226,21 +231,22 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
   function fulfillOracleRequest(
     bytes32 _requestId,
     bytes32 _data
-  )
-  external
-  returns (bool)
-  {
+  ) external isValidRequest(_requestId) returns (bool) {
     Callback memory callback = callbacks[_requestId];
     ServiceAgreement memory sA = serviceAgreements[callback.sAId];
     (bool ok, bytes memory aggResponse) = sA.aggregator.call(
       abi.encodeWithSelector(
         sA.aggFulfillSelector, _requestId, callback.sAId, msg.sender, _data));
     require(ok, "aggregator.fulfill failed");
+    require(aggResponse.length > 0, "probably wrong address/selector");
     (bool aggSuccess, bool aggComplete, bytes memory response) = abi.decode(
       aggResponse, (bool, bool, bytes));
     require(aggSuccess, string(response));
     if (aggComplete) {
-      (bool success,) = callback.addr.call(abi.encodeWithSelector(
+      for (uint256 oIdx = 0; oIdx < sA.oracles.length; oIdx++) { // pay oracles
+        withdrawableTokens[sA.oracles[oIdx]] += sA.payment / sA.oracles.length;
+      }
+      (bool success,) = callback.addr.call(abi.encodeWithSelector( // report final result
                                              callback.functionId,
                                              _requestId,
                                              abi.decode(response, (bytes32))));
@@ -311,7 +317,6 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
         _agreement.requestDigest,
         _agreement.aggregator,
         _agreement.aggInitiateJobSelector,
-        _agreement.aggInitiateRequestSelector,
         _agreement.aggFulfillSelector
     ));
   }
@@ -340,7 +345,6 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
    */
   modifier isValidRequest(bytes32 _requestId) {
     require(callbacks[_requestId].addr != address(0), "Must have a valid requestId");
-    require(callbacks[_requestId].responses[msg.sender] == 0, "Cannot respond twice");
     require(allowedOracles[callbacks[_requestId].sAId][msg.sender], "Oracle not recognized on service agreement");
     _;
   }

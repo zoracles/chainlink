@@ -11,7 +11,7 @@ contract CoordinatorInterface {
     // This effectively functions as an ID tag for the service agreement. It is
     // calculated as the keccak256 hash of the normalized JSON request to create
     // the ServiceAgreement, but that identity is unused.
-    bytes32 requestDigest; 
+    bytes32 requestDigest;
 
     // Specification of aggregator interface. See ./Aggregate.sol for an example
     address aggregator;
@@ -20,8 +20,6 @@ contract CoordinatorInterface {
     //
     // Function selector for aggregator initiateJob method
     bytes4 aggInitiateJobSelector;
-    // Function selector for aggregator initiateRequest method
-    bytes4 aggInitiateRequestSelector;
     // Function selector for aggregator fulfill method
     bytes4 aggFulfillSelector;
   }

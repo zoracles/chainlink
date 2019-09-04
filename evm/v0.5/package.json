@@ -26,7 +26,7 @@
     "ethereumjs-abi": "^0.6.5",
     "openzeppelin-test-helpers": "^0.4.1",
     "solhint": "^2.1.0",
-    "truffle": "^5.0.25"
+    "truffle": "^5.0.25",
     "types-bn": "^0.0.1"
   },
   "files": [

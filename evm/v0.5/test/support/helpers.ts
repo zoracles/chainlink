@@ -198,7 +198,7 @@ export const functionSelector = web3.eth.abi.encodeFunctionSignature
 export const functionSelectorFromAbi = (contract: TruffleContract, name: string): string => 
   functionSelector(getMethod(contract, name))
 
-export const assertActionThrows = (action: any) =>
+export const assertActionThrows = (action: any, messageContains?: RegExp) =>
   Promise.resolve()
     .then(action)
     .catch(error => {
@@ -216,6 +216,10 @@ export const assertActionThrows = (action: any) =>
         invalidOpcode || reverted,
         'expected following error message to include "invalid JUMP" or ' +
           `"revert": "${errorMessage}"`
+      )
+      assert(
+        (!messageContains) || messageContains.test(errorMessage),
+        `expected error message to contain ${messageContains}: ${errorMessage}`
       )
       // see https://github.com/ethereumjs/testrpc/issues/39
       // for why the "invalid JUMP" is the throw related error when using TestRPC
@@ -462,7 +466,6 @@ interface ServiceAgreement { // Corresponds to ServiceAgreement struct in Coordi
   requestDigest: string, // 0x hex representation of bytes32
   aggregator: string, // 0x hex representation of aggregator address
   aggInitiateJobSelector: string, // 0x hex representation of aggregator.initiateAggregatorForJob function selector (uint32)
-  aggInitiateRequestSelector: string, // function selector for aggregator.initiateRequest
   aggFulfillSelector: string, // function selector for aggregator.fulfill
   // Information which is useful to carry around with the agreement, but not
   // part of the solidity struct
@@ -480,7 +483,6 @@ export const calculateSAID = (sa: ServiceAgreement): Uint8Array => {
     newHash(sa.requestDigest),
     newAddress(sa.aggregator),
     newSelector(sa.aggInitiateJobSelector),
-    newSelector(sa.aggInitiateRequestSelector),
     newSelector(sa.aggFulfillSelector)
   )
   const serviceAgreementIDInputDigest = util.keccak(

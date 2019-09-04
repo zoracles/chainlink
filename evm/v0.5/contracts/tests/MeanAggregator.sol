@@ -22,9 +22,6 @@ contract MeanAggregator {
   function initiateJob(
     bytes32 _sAId, CoordinatorInterface.ServiceAgreement memory _sa)
     public returns (bool success, bytes memory message) {
-    // If this is empty a failing require() in the calling context will give a
-    // simple "revert" message, which is hard to diagnose.
-    message = "error message unset"; 
     if (numOracles[_sAId] != 0) {
       return (false, bytes("job already initiated"));
     }
@@ -33,29 +30,30 @@ contract MeanAggregator {
     }
     numOracles[_sAId] = _sa.oracles.length;
     success = true;
-    message = "";
   }
 
-  event Fulfillment(bytes32 value);
+  event Fulfillment(bytes32 requestId, bytes32 value);
 
   function fulfill(bytes32 _requestId, bytes32 _sAId, address _oracle,
                    bytes32 _value)
     public returns (bool success, bool complete, bytes memory response) {
-    emit Fulfillment(_value);
+    emit Fulfillment(_requestId, _value);
     if (reported[_requestId][_oracle]) {
       return (false, false, "oracle already reported");
     }
     uint256 oDividend = uint256(_value) / numOracles[_sAId];
     uint256 oRemainder = uint256(_value) % numOracles[_sAId];
     uint256 newRemainder = remainder[_requestId] + oRemainder;
-    uint256 newAverage = average[_requestId] + oDividend + (newRemainder % numOracles[_sAId]);
+    uint256 newAverage = average[_requestId] + oDividend + (newRemainder / numOracles[_sAId]);
     assert(newAverage >= average[_requestId]); // No overflow
     average[_requestId] = newAverage;
-    remainder[_requestId] = newRemainder / numOracles[_sAId];
+    remainder[_requestId] = newRemainder % numOracles[_sAId];
     numberReported[_requestId] += 1;
     success = true;
+    reported[_requestId][_oracle] = true;
     complete = (numberReported[_requestId] == numOracles[_sAId]);
     if (complete) {
+      emit Fulfillment(bytes32(0), bytes32(average[_requestId]));
       response = abi.encode(average[_requestId]);
     }
   }

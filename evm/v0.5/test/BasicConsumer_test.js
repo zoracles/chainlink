@@ -56,7 +56,7 @@ contract('BasicConsumer', () => {
 
       it('has a reasonable gas cost', async () => {
         let tx = await cc.requestEthereumPrice(currency, payment)
-        assert.isBelow(tx.receipt.gasUsed, 120000)
+        assert.isBelow(tx.receipt.gasUsed, 130000)
       })
     })
   })
@@ -77,7 +77,6 @@ contract('BasicConsumer', () => {
       })
 
       const currentPrice = await cc.currentPrice.call()
-      debugger
       assert.equal(h.toUtf8(currentPrice), response)
     })
 
@@ -108,6 +107,9 @@ contract('BasicConsumer', () => {
       })
 
       it('does not accept the data provided', async () => {
+        // XXX: How is this test supposed to work? A valid request with
+        // otherRequest's ID was made in the beforeEach!
+        otherRequest.id = web3.utils.randomHex(32) // XXX: Overwriting the valid requestId
         await h.fulfillOracleRequest(oc, otherRequest, response, {
           from: h.oracleNode
         })
