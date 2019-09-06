@@ -58,6 +58,7 @@ func (etx EthTxEncode) ABI() (*abi.ABI, error) {
 	rv := abi.ABI{}
 	method := abi.Method{}
 	method.Name = etx.MethodName
+	method.RawName = etx.MethodName
 	method.Inputs = make([]abi.Argument, len(etx.Order))
 	for idx, argName := range etx.Order {
 		typeName := etx.Types[argName]
