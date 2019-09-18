@@ -16,7 +16,7 @@
     "truffle:migrate": "truffle migrate --compile-all --reset --network test"
   },
   "dependencies": {
-    "chainlink": "0.6.1"
+    "chainlink": "0.6.5"
   },
   "devDependencies": {
     "@chainlink/eslint-config": "0.0.1",
