@@ -7,6 +7,8 @@ const GetterSetter = artifacts.require('GetterSetter.sol')
 const MaliciousConsumer = artifacts.require('MaliciousConsumer.sol')
 const MaliciousRequester = artifacts.require('MaliciousRequester.sol')
 
+import * as fs from 'fs'
+
 contract('Coordinator', () => {
   let coordinator, link, newServiceAgreement, emptyAggregator, meanAggregator
 
@@ -129,6 +131,23 @@ contract('Coordinator', () => {
           ),
         )
         await h.checkServiceAgreementAbsent(coordinator, agreement.id)
+      })
+    })
+    context('Regression from integration test', async () => {
+      it.only('Does the right thing with these seemingly sensible arguments', async () => {
+        console.log('cwd', process.cwd())
+        const request = JSON.parse(
+          fs.readFileSync('../../integration/agreement.json'),
+        )
+        const signature = h.newSignature(
+          '0x' +
+            'c846280320ffef933ce090706c61945865e3407cbf35b6a3edd63cf11e219020' +
+            '6f531499c7d3b748a3538ed41bf0df76ad421704d7ab89131ae3b11654ce62b7' +
+            '01',
+        )
+        console.log('signatures', signature)
+        console.log('request', request)
+        const requestDigest = h.keccak()
       })
     })
   })

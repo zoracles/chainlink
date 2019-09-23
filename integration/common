@@ -151,7 +151,7 @@ deploy_v05_contracts() {
 
   title "Compiling Contracts..."
   export DAPP_SRC="../evm/v0.5/contracts"
-  dapp build --extract
+  dapp build --extract # XXX: Restore
 
   title "Deploying LINK Token..."
   export ETH_KEYSTORE="../tools/gethnet/datadir/keystore/"

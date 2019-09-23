@@ -608,8 +608,9 @@ export const initiateServiceAgreementArgs = ({
 export const concatUint8Arrays = (...arrays: Uint8Array[]): Uint8Array =>
   Uint8Array.from(Buffer.concat(arrays.map(Buffer.from)))
 
+const bigEndian = 'be'
 export const BNtoUint8Array = (n: BN): Uint8Array =>
-  Uint8Array.from(new BN(n).toArray('be', 32))
+  Uint8Array.from(new BN(n).toArray(bigEndian, 32))
 
 export function pad0xHexTo256Bit(s: string): string {
   return Ox(padHexTo256Bit(strip0x(s)))
@@ -632,17 +633,25 @@ export const newUint8ArrayFromHex = (
 export const newSelector = (str: string): Uint8Array =>
   newUint8ArrayFromHex(str, 4)
 
+export const unixTime = (s: number|string):BN => {
+  if (typeof s == 'number') {
+    return bigNum(s)
+  }
+  const millisecondsPerSecond = 1000
+  return bigNum(Date.parse(s).valueOf() / millisecondsPerSecond)
+}
+
 export const calculateSAID2 = (sa: any): any => {
   const serviceAgreementIDInput = concatUint8Arrays(
     BNtoUint8Array(sa.payment),
     BNtoUint8Array(sa.expiration),
-    BNtoUint8Array(sa.endAt),
+    Uint8Array.from(unixTime(sa.endAt).toArray(bigEndian, 4)),
     // Each address in this list is padded to a uint256, despite being a uint160
     ...sa.oracles.map(pad0xHexTo256Bit).map(newHash),
-    newHash(sa.requestDigest),
-    newAddress(sa.aggregator),
+    newHash(sa.aggregator), // Address padded to uint256 instead of uint160
     newSelector(sa.aggInitiateJobSelector),
     newSelector(sa.aggFulfillSelector),
+    newHash(sa.requestDigest),
   )
   const serviceAgreementIDInputDigest = util.keccak(
     toHex(serviceAgreementIDInput),

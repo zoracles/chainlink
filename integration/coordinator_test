@@ -15,12 +15,12 @@ initial_spec=$(cat $sa_spec_path)
 agreement_response=$(cldev -j agreements create $sa_spec_path)
 
 function query_agreement() {
-    echo "$agreement_response" | jq .$1
+    echo "$agreement_response" | jq -r .$1
 }
 
 function check_sa_output() {
     cl_output=$(query_agreement $1)
-    cl_input=$(echo "$initial_spec" | jq .$2)
+    cl_input=$(echo "$initial_spec" | jq -r .$2)
     if [ -z "$cl_output" ] ; then echo "output for $1 was empty"; exit 1; fi
     if [ -z "$cl_input" ] ; then echo "input for $2 was empty"; exit 1; fi
     if [ "$cl_output" != "$cl_input" ]; then
@@ -38,6 +38,9 @@ check_sa_output encumbrance.aggFulfillSelector     aggFulfillSelector
 # Used in initiate_service_agreement.js
 export ORACLE_SIGNATURE=$(query_agreement signature) 
 export NORMALIZED_REQUEST=$(query_agreement requestBody)
+
+echo "ORACLE_SIGNATURE" $ORACLE_SIGNATURE
+echo "NORMALIZED_REQUEST" $NORMALIZED_REQUEST
 
 agreement_path=scripts/initiate_service_agreement.js
 yarn workspace @chainlink/integration truffle exec $agreement_path --network test

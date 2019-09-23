@@ -3,66 +3,93 @@
 // truffle script
 
 const chai = require('chai')
-global.web3 = require('web3') // XXX: These are needed for helpers.js, for now.
+const path = require('path')
+global.web3 = new (require('web3'))() // XXX: These are needed for helpers.js, for now.
 global.assert = chai.assert
+
+console.log('COORDINATOR_ADDRESS', process.env.COORDINATOR_ADDRESS)
+const SRC_ROOT = '../../' // Root of chainlink source code, relative to cwd
+const fullPath = s => path.resolve(SRC_ROOT, s)
+
+console.log('path', process.cwd(), fullPath('evm/dist/src/helpers.js'))
 
 // XXX: Hopefully there'll be a nicer way to access this, by the time this is
 // ready.
-const chainLink = require('../../evm/dist/src/helpers.js')
+const chainLink = require(fullPath('evm/dist/src/helpers.js'))
 
 const fs = require('fs')
 const request = require('request-promise').defaults({ jar: true })
 const url = require('url')
-const { abort, DEVNET_ADDRESS, scriptRunner } = require('../common.js')
+const { abort, DEVNET_ADDRESS, scriptRunner } = require(fullPath(
+  'integration/common.js',
+))
 
-console.log('cwd', __dirname)
 const CoordinatorABI = JSON.parse(
-  fs.readFileSync('../../evm/v0.5/build/contracts/Coordinator.json', 'utf8'),
+  fs.readFileSync(
+    fullPath('evm/v0.5/build/contracts/Coordinator.json'),
+    'utf8',
+  ),
 ).abi
 const coordinatorAddress = process.env.COORDINATOR_ADDRESS
-const Coordinator = new web3.eth.Contract(CoordinatorABI, coordinatorAddress)
-Coordinator.abi = CoordinatorABI
 
-const agreement = JSON.parse(fs.readFileSync('../agreement.json', 'utf8'))
+const agreement = JSON.parse(
+  fs.readFileSync(fullPath('integration/agreement.json'), 'utf8'),
+)
 
 const amount = web3.utils.toBN(web3.utils.toWei('1000'))
 
-const stripQuotes = s => s.replace(/"(0x[0-9a-fA-F]+)"/, '$1')
+const stripQuotes = s => s.replace(/^"(.*)"$/, '$1')
 const rawSignature = stripQuotes(process.env.ORACLE_SIGNATURE)
 
 agreement.oracleSignatures = [chainLink.newSignature(rawSignature)]
-agreement.requestDigest = web3.utils.keccak256(
-  stripQuotes(process.env.NORMALIZED_REQUEST),
-)
+agreement.requestDigest = web3.utils.keccak256(process.env.NORMALIZED_REQUEST)
 agreement.sAID = chainLink.calculateSAID2(agreement)
-
-module.exports = async function(callback) {
-  console.log('foo')
-  console
-    .log(
-      'initiateServiceAgreementCall',
-      await chainLink.initiateServiceAgreementCall(Coordinator, agreement),
-    )
-    .catch(err => {
-      console.log('initiateServiceAgreementCall', err)
-      callback(err)
-    })
-  console.log('bar')
-  console
-    .log(
-      'oracleRequest',
-      await Coordinator.oracleRequest(
-        agreement.sAID,
-        '0x0101010101010101010101010101010101010101', // Receiving contract address
-        '0x12345678', // receiving method selector
-        1, // nonce
-        '', // data for initialization of request
-      ),
-    )
-    .catch(err => {
-      console.log('oracleRequest', err)
-      callback(err)
-    })
-  console.log('baz')
-  callback()
+console.log(
+  'requestDigest',
+  agreement.requestDigest,
+  'sAID',
+  chainLink.toHex(agreement.sAID),
+)
+const nreq = new Buffer(stripQuotes(process.env.NORMALIZED_REQUEST), 'utf8')
+const myBuffer = []
+for (let i = 0; i < nreq.length; i++) {
+  myBuffer.push(nreq[i])
 }
+console.log('raw request', process.env.NORMALIZED_REQUEST)
+console.log('request', myBuffer.toString())
+
+const endAtEpochMilliseconds = new Date(agreement.endAt).getTime()
+const millisecondsPerSecond = 1000
+agreement.endAt = endAtEpochMilliseconds / millisecondsPerSecond
+
+const Coordinator = new web3.eth.Contract(CoordinatorABI, coordinatorAddress)
+// XXX: Monkey-patching some truffle-attributes assumed by helpers
+Coordinator.abi = CoordinatorABI
+Coordinator.initiateServiceAgreement =
+  Coordinator.methods.initiateServiceAgreement
+
+const main = async () => {
+  console.log(
+    'initiateServiceAgreementArgs',
+    chainLink.initiateServiceAgreementArgs2(Coordinator, agreement),
+  )
+  console.log(
+    'initiateServiceAgreement',
+    await (await chainLink.initiateServiceAgreement2(
+      Coordinator,
+      agreement,
+    )).call(),
+  )
+  // console.log(
+  //   'oracleRequest',
+  //   await Coordinator.methods.oracleRequest(
+  //     agreement.sAID,
+  //     '0x0101010101010101010101010101010101010101', // Receiving contract address
+  //     '0x12345678', // receiving method selector
+  //     1, // nonce
+  //     '', // data for initialization of request
+  // ),
+  // )
+}
+
+module.exports = scriptRunner(main)

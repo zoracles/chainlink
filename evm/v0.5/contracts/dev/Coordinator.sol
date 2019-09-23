@@ -124,6 +124,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     public
     returns (bytes32 serviceAgreementID)
   {
+    return bytes32(0);
     require(
       _agreement.oracles.length == _signatures.vs.length &&
       _signatures.vs.length == _signatures.rs.length &&
@@ -311,10 +312,10 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
         _agreement.expiration,
         _agreement.endAt,
         _agreement.oracles,
-        _agreement.requestDigest,
         _agreement.aggregator,
         _agreement.aggInitiateJobSelector,
-        _agreement.aggFulfillSelector
+        _agreement.aggFulfillSelector,
+        _agreement.requestDigest
     ));
   }
 

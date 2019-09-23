@@ -3,6 +3,7 @@ package models
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -155,6 +156,7 @@ func NewUnsignedServiceAgreementFromRequest(reader io.Reader) (UnsignedServiceAg
 		},
 	}
 
+	fmt.Println("normalized", []byte(normalized))
 	requestDigest, err := utils.Keccak256([]byte(normalized))
 	if err != nil {
 		return UnsignedServiceAgreement{}, err
@@ -165,11 +167,13 @@ func NewUnsignedServiceAgreementFromRequest(reader io.Reader) (UnsignedServiceAg
 	if err != nil {
 		return UnsignedServiceAgreement{}, err
 	}
+	fmt.Println("requestDigest", hex.EncodeToString(requestDigest), "sAID", us.ID.Hex())
 	return us, nil
 }
 
 func generateServiceAgreementID(e Encumbrance, digest common.Hash) (common.Hash, error) {
 	buffer, err := serviceAgreementIDInputBuffer(e, digest)
+	fmt.Printf("serviceAgreementIDInputBuffer %x\n", buffer)
 	if err != nil {
 		return common.Hash{}, nil
 	}
