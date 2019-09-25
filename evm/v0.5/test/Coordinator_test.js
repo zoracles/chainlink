@@ -147,7 +147,8 @@ contract('Coordinator', () => {
         )
         console.log('signatures', signature)
         console.log('request', request)
-        const requestDigest = h.keccak()
+        const requestDigest = // Extracted from integration/scripts/initiate_service_agreement.js
+          '0x271e2c479dba9a252fd6b4438f88edcc9c75f996a5ddfdc143fec0f9f401e6b7'
       })
     })
   })

@@ -253,6 +253,8 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     return true;
   }
 
+  function dummyMethodXXX() external returns (uint256) { return 1; }
+
   /**
    * @dev Allows the oracle operator to withdraw their LINK
    * @param _recipient is the address the funds will be sent to

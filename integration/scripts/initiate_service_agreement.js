@@ -25,12 +25,12 @@ const { abort, DEVNET_ADDRESS, scriptRunner } = require(fullPath(
 ))
 
 const CoordinatorABI = JSON.parse(
-  fs.readFileSync(
-    fullPath('evm/v0.5/build/contracts/Coordinator.json'),
-    'utf8',
-  ),
-).abi
+  fs.readFileSync(fullPath('integration/out/Coordinator.abi'), 'utf8'),
+)
+console.log('########################################################################', CoordinatorABI)
 const coordinatorAddress = process.env.COORDINATOR_ADDRESS
+
+console.log('coordinator_address', coordinatorAddress)
 
 const agreement = JSON.parse(
   fs.readFileSync(fullPath('integration/agreement.json'), 'utf8'),
@@ -55,9 +55,6 @@ const myBuffer = []
 for (let i = 0; i < nreq.length; i++) {
   myBuffer.push(nreq[i])
 }
-console.log('raw request', process.env.NORMALIZED_REQUEST)
-console.log('request', myBuffer.toString())
-
 const endAtEpochMilliseconds = new Date(agreement.endAt).getTime()
 const millisecondsPerSecond = 1000
 agreement.endAt = endAtEpochMilliseconds / millisecondsPerSecond
@@ -73,6 +70,8 @@ const main = async () => {
     'initiateServiceAgreementArgs',
     chainLink.initiateServiceAgreementArgs2(Coordinator, agreement),
   )
+  // console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@', await web3.eth.getCode(coordinatorAddress))
+  console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!', await Coordinator.methods.dummyMethodXXX().call({gas: 6238833, from: "0x9ca9d2d5e04012c9ed24c0e513c9bfaa4a2dd77f"}))
   console.log(
     'initiateServiceAgreement',
     await (await chainLink.initiateServiceAgreement2(
