@@ -253,7 +253,7 @@ contract Coordinator is ChainlinkRequestInterface, CoordinatorInterface {
     return true;
   }
 
-  function dummyMethodXXX() external returns (uint256) { return 1; }
+  function dummyMethodXXX() external returns (string memory) { return "foobar"; }
 
   /**
    * @dev Allows the oracle operator to withdraw their LINK
