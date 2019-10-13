@@ -36,3 +36,10 @@ rm -rf libsecp256k1/.git # Remove git history from libsecp256k1 clone
 # #include lines, or in dot files.
 find libsecp256k1 -not -path '*/\.*' -type f -print0 | \
     xargs -0 sed -i '/^#include/! s/secp256k1_/secp256k1_kyber_/g'
+
+# Generate config files, and the 
+pushd libsecp256k1
+./autogen.sh
+./configure
+make src/ecmult_static_context.h
+popd
