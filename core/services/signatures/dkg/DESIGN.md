@@ -1,16 +1,17 @@
 # Network interactions for distributed key generation
 
 This describes the network messages participants must send each other, to
-construct a distributed public/secret key pair. The purpose is construction of
-threshold signatures, as outlined in figure 4, p. 74 of [Secure Distributed Key
-Generation for Discrete-Log Based Cryptosystems
-](https://link.springer.com/content/pdf/10.1007/s00145-006-0347-3.pdf).
+construct a distributed public/secret key pair, as outlined in figure 4, p. 74
+of [Secure Distributed Key Generation for Discrete-Log Based Cryptosystems](
+https://link.springer.com/content/pdf/10.1007/s00145-006-0347-3.pdf). The
+purpose is construction of threshold signatures.
 
 Note that as described in that paper, this allows an adversary a small degree of
 control over the public key (through exiting the protocol early), but, as it
 argues, that control is insufficent to seriously weaken the security of the
-signature protocol. Just don't use it in contexts which depend on the public key
-being a uniform sample!
+signature protocol. Don't use it in contexts which depend on the public key
+being a uniform sample! Use the main method of that paper, instead (but that is
+twice the bandwidth, and an extra round.)
 
 Since in the end we can't trust the network to deliver messages for us, a key
 idea for the final version of the workflow is to use a smart contract on the
@@ -63,20 +64,25 @@ unless that's explicitly indicated.
       the offending node has a stake, and it is slashed (this is the reason the
       commitments should be sent in small batches with independent signatures,
       so that on-chain verification is not too expensive.) The node is removed
-      from further participation in the DKG. **In the first initial version**,
-      the offending node is just removed without being slashed. 
+      from further participation in the DKG. **In the initial version**, the
+      offending node is just removed without being slashed, and the complaint is
+      simply shared among the nodes.
    3. Failure 2: A node fails to send some portion of its commitments to some
       other node. Punishing this directly is more complex, because it cannot be
-      cryptographically verified. It's tempting to add a financial penalty for
+      cryptographically verified, and might depend on network failures out of
+      the node operator's control. It's tempting to add a financial penalty for
       consistent failure to deliver, but not strictly necessary, since the
-      protocol is designed to continue if some fraction of nodes drop out.
+      protocol is designed to continue if some fraction of nodes drop out. Such
+      a penalty should be encoded as an extension to the message to be signed,
+      because any kind of on-chain negotiation about a complaint would slow the
+      signature process down dramatically.
       
-      However, it will be useful for any pair of nodes with a good connection to
-      be able to request a third node's data from each other, in order to route
-      around partial network failures. For this purpose, the nodes can publish
-      to each other which portions of the data they have received. Since the
-      messages are signed, there is no scope here for intermediaries to corrupt
-      the data they forward. 
+      In any case, it will be useful for a pair of nodes with a good connection
+      to be able to request a third node's data from each other, in order to
+      route around partial network failures. For this purpose, the nodes can
+      publish to each other which portions of the data they have received. Since
+      the messages are signed, there is no scope here for intermediaries to
+      corrupt the data they forward.
       
       Obviously, that is **not needed for the initial version.**
 4. All nodes *j* ask all other nodes *i* for their secret share (*fᵢ*(*j*), in
@@ -91,10 +97,10 @@ unless that's explicitly indicated.
    shares from.
    1. If some node doesn't respond to some other node with its secret shares by
       a certain number of blocks, the recipient can post a request on the
-      coordinating contract. If the mandated sender repeated fails to respond
-      on-chain, they should be slashed and removed from the process. The
-      on-chain response must be the shares, encrypted with the recipient's
-      public key.
+      coordinating contract. If the mandated sender repeatedly fails to respond
+      to such requests on-chain, they should be slashed and removed from the
+      process. The on-chain response must be the shares, encrypted with the
+      recipient's public key.
       
       **In the initial version**, we'll just pretend everyone responds
       faithfully.
@@ -107,6 +113,10 @@ unless that's explicitly indicated.
       for that part of the calculation the defendant wins and the plaintiff is
       slashed, otherwise vice versa.
       
+      Instead of posting a complaint on the contract, valid complaints could be
+      included as part of the message to be signed. Then complex on-chain
+      verification is unnecessary.
+      
       **In the initial version,** we'll just broadcast the complaint amongst the
       group over the network, as usual, and nodes will be responsible for
       verifying the complaint and ejecting the bad actor themselves (already
@@ -117,17 +127,25 @@ unless that's explicitly indicated.
       signature groups, though, so we'll need the challenge/response protocol
       described above.
 5. After some timeout, if there's no clique of nodes who have reported receiving
-   correct shares from each other, key generation halts. Otherwise, the maximal
-   clique is used from here on, and the other participants are thrown out for
-   the life of the key.
-6. The remaining members all share the public keys of their secret coefficients
-   (the *Aᵢₖ*=*aᵢₖG*, in step 3 of section 2.4 of Stinson and Strobl), using
-   much the same protocol as in the [above three steps](#coefficient-request)
-   for the coefficient commitments.
-7. After some timeout, if any node has failed to fully and correctly report its
-   coefficient's public keys, its secret coefficients are reconstructed by the
-   remaining nodes. The failure is noted on the contract, and the failing node
-   is slashed and excluded from further participation. In order for the
-   reconstruction to occur, every node but the failing one broadcasts the secret
-   share they received from the failure. If any node fails to receive one of
-   these shares, 
+   correct shares from each other, key generation halts. 
+6. Any node *j* which receives all shares *fᵢ*(*j*) is able to construct the
+   distributed public key using the equations in section 2.2 of Stinson &
+   Strobl.
+7. If this is a distributed ephemeral key for a signature with a pre-existing
+   distributed persistent key constructed by the participants, they follow the
+   signature-issuing protocol described in section 4.2 of Stinson & Strobl. At
+   this stage, we have completed step 1. of that protocol.
+8. Each node provides the signature with their term of the secret distributed
+   key, as in step 2. of the signature Stinson & Strobl protocol.
+   1. If some node fails to provide their signature, they can be ignored.
+   2. If some node provides a signature which fails to verify according to
+      equation (3) in step 3. of the Stinson & Strobl protocol, their
+      contribution is ignored. 
+      
+      At this point, we can't add more information to the message to be signed.
+      So on-chain validation of the node misbehavior has to be verified
+      cryptographically or by voting (or by construction of yet another
+      signature.) **In the initial version,** we'll just ignore such messages.
+   3. Once a node has received partial signatures from sufficiently many
+      participants, it can construct the signature as described in step 4 of the
+      S & S protocol.,
