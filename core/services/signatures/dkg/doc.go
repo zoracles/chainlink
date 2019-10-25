@@ -39,7 +39,15 @@ package collaboration
 //
 // At some point, we will want complaints to take place on the blockchain, so
 // that there can be financial accountability for failures. Verification of
-// these complaints should come in the form of votes.
+// these complaints should inititially come in the form of votes.
+//
+// At some point, we will want the blockchain to be able to verify complaints
+// cryptographically. The protocol should be designed with this in mind. This
+// means, for instance, that it must be possible to cheaply verify that a
+// polynomial evaluation is correct, or that two people got different
+// coefficient commitments from some participant. Therefore, the communication
+// must be well abstracted from the cryptographic business of constructing the
+// signature.
 
 // Notes
 //
