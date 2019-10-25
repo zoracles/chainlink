@@ -1,10 +1,33 @@
-# Intended full workflow
+# Network interactions for distributed key generation
+
+This describes the network messages participants must send each other, to
+construct a distributed public/secret key pair. The purpose is construction of
+threshold signatures, as outlined in figure 4, p. 74 of [Secure Distributed Key
+Generation for Discrete-Log Based Cryptosystems
+](https://link.springer.com/content/pdf/10.1007/s00145-006-0347-3.pdf).
+
+Note that as described in that paper, this allows an adversary a small degree of
+control over the public key (through exiting the protocol early), but, as it
+argues, that control is insufficent to seriously weaken the security of the
+signature protocol. Just don't use it in contexts which depend on the public key
+being a uniform sample!
 
 Since in the end we can't trust the network to deliver messages for us, a key
 idea for the final version of the workflow is to use a smart contract on the
 blockchain itself as a coordination mechanism, because it's explicitly designed
 for censorship resistance. To keep things cheap on the happy path, this trick is
 only used when failures are observed.
+
+There are some complex ideas in what follows for allowing on-chain
+accountability for off-chain misbehavior in later versions. An alternative would
+be for signatures to sign the desired message, plus a message describing the
+participants' performances. This could be combined with the original message
+just by hashing the concatenation of the hashes of the two messages. This
+lengthens the signatures (you have to send the hash of the performance message
+along, for verifiers who only want to verify the original message), but does
+lead to a much simpler protocol.
+
+## Intended full workflow
 
 While this is an ordered list, many of the steps are independent, especially
 between nodes. It is not necessary to synchronize the nodes at every step,
@@ -15,63 +38,57 @@ unless that's explicitly indicated.
    The contract will be an early part of the development, though, if only to
    store the participants which are still in good standing so that the nodes can
    look up who to talk to.
-1. The index assigned to each node is the hash of its public key, interpreted as
-   a scalar mod N (the secp256k1 group order. Keep hashing the hash until it
-   corresponds to something less than N, which happens about 99.9999999% of the
-   time.)
+1. <a href="node-indices"/> The index assigned to each node is its ordinal index
+   in some list, such as the service agreement which the group is signing
+   reports to.
 2. Nodes contact each other through a DHT, looking up the other participants'
    host info via their public keys. Chainlink will run a bootstrap node for
    this DHT.
-3. <a id="coefficient-request"/>Every node requests the coefficient commitments
-   (*Cᵢₖ*, in section 2.4, step 1 of [Stinson and Strobl 2001
+3. Every node requests the public keys of the coefficients (*Aᵢₖ=aᵢₖG*, in
+   section 2.4, step 3 of [Stinson and Strobl 2001
    ](https://www.researchgate.net/profile/Willy_Susilo/publication/242499559_Information_Security_and_Privacy_13th_Australasian_Conference_ACISP_2008_Wollongong_Australia_July_7-9_2008_Proceedings/links/00b495314f3bcaaa46000000.pdf#page=426))
    of every other node.
    1. In the happy path, the nodes comply with these requests, sending the same
-      commitments to every other node. In the final version of the protocol,
+      public keys to every other node. In the final version of the protocol,
       these should be preceded by a signed merkle-tree commitment to the full
-      set of coefficients, and the commitments should be sent as signed batches
-      of merkle subtrees, along with the merkle path to the initial commitment.
+      set of keys, and the keys should be sent as signed batches of merkle
+      subtrees, along with the merkle path to the initial commitment. 
+      
       **In the initial version** assuming the happy path, the commitments can
-      just be sent over as a block. 
-   2. Failure 1: A node sends inconsistent commitments to other nodes. In the
-      final version the nodes publish the initial commitments they've received
-      from every other node, and every node compares them. Any inconsistencies
-      are reported to a smart contract where the offending node has a stake, and
-      it is slashed (this is the reason the commitments should be sent in small
-      batches with independent signatures, so that on-chain verification is not
-      too expensive.) The node is removed from further participation in the DKG.
-      **In the first initial version**, the offending node is just removed
-      without being slashed. That much is already implemented.
-   3. Failure 2: A node fails to send some portion of its commitments. Handling
-      this is more complex, because it cannot be cryptographically verified.
-      After a certain number of blocks, the expectant recipient node reports the
-      failure on a smart contract. Other nodes can report to the contract that
-      they have the data, along with their host address, and the expectant node
-      can then ask them for it. This allows the group to route around partial
-      network failures.
+      just be sent over as a block.
+   2. Failure 1: Some node sends inconsistent coefficient-public-keys *Aᵢₖ* to
+      other nodes. In the final version the nodes publish the initial
+      commitments they've received from every other node, and every node
+      compares them. Any inconsistencies are reported to a smart contract where
+      the offending node has a stake, and it is slashed (this is the reason the
+      commitments should be sent in small batches with independent signatures,
+      so that on-chain verification is not too expensive.) The node is removed
+      from further participation in the DKG. **In the first initial version**,
+      the offending node is just removed without being slashed. 
+   3. Failure 2: A node fails to send some portion of its commitments to some
+      other node. Punishing this directly is more complex, because it cannot be
+      cryptographically verified. It's tempting to add a financial penalty for
+      consistent failure to deliver, but not strictly necessary, since the
+      protocol is designed to continue if some fraction of nodes drop out.
       
-      If some node offers missing data, and then doesn't provide it, the
-      reporting procedure repeats with a complaint about missing data from that
-      node. To prevent an arbitrary regress by hostile nodes, this process can
-      only cycle a limited number of times (say, three.)
+      However, it will be useful for any pair of nodes with a good connection to
+      be able to request a third node's data from each other, in order to route
+      around partial network failures. For this purpose, the nodes can publish
+      to each other which portions of the data they have received. Since the
+      messages are signed, there is no scope here for intermediaries to corrupt
+      the data they forward. 
       
-      The first time a threshold of nodes report some node as having failed to
-      provide its commitments, probably no penalty should be levied. But
-      repeated failure should probably be penalized heavily, and at the least
-      the node should be removed from the group for all future key generation.
-      
-      **In the initial version**, we'll just pretend this can't happen. In a
-      later version, we'll just drop the failing node from the group, and
-      exclude them for the lifetime of the key. (They can come back to later
-      rounds if they failed during construction of an ephemeral key.) 
-4. All nodes ask all other nodes for their secret shares (*f*(*u*) and
-   *f'*(*u*), in step 1 of section 2.4 in Stinson & Strobl.) Once they've
-   verified their shares from a particular node, they announce to the network.
-   The response with the shares must include a merkle commitment to the
-   calculation verifying the shares. (These are just sums of scalar multiples of
-   the transmitting node's commitments, so they can be arranged in nice binary
-   trees using associativity.) Nodes broadcast to the group who they've received
-   correct shares from.
+      Obviously, that is **not needed for the initial version.**
+4. All nodes *j* ask all other nodes *i* for their secret share (*fᵢ*(*j*), in
+   the notation of step 1 of section 2.4 in Stinson & Strobl, where *j* is the
+   [index described above](#node-indices).) Once they've verified their shares
+   from a particular node, as in equation (2) in Stinson and Strobl, they
+   announce to the network. In a later version, the response with the shares
+   must include a merkle commitment to the calculation verifying the shares.
+   (These are just sums of scalar multiples of the transmitting node's
+   commitments, so they can be arranged in nice binary trees using
+   associativity.) Nodes broadcast to the group who they've received correct
+   shares from.
    1. If some node doesn't respond to some other node with its secret shares by
       a certain number of blocks, the recipient can post a request on the
       coordinating contract. If the mandated sender repeated fails to respond
@@ -82,13 +99,13 @@ unless that's explicitly indicated.
       **In the initial version**, we'll just pretend everyone responds
       faithfully.
    2. If some node sends shares which don't verify, the recipient posts a
-      complaint to the contract, along merkle commitments to the two halves of
-      calculation it's done during the verification process. The defendant node
-      must respond within a few blocks, stating which half differs. The process
-      repeats recursively, until the leaves of the calculation are reached. If
-      they involve valid multiples of the coefficient commitments for that part
-      of the calculation the defendant wins and the plaintiff is slashed,
-      otherwise vice versa.
+      complaint to the contract, along with merkle commitments to the two halves
+      of calculation it's done during the verification process. The defendant
+      node must respond within a few blocks, stating which half differs. The
+      process repeats recursively, until the leaves of the calculation are
+      reached. If they involve valid multiples of the coefficient commitments
+      for that part of the calculation the defendant wins and the plaintiff is
+      slashed, otherwise vice versa.
       
       **In the initial version,** we'll just broadcast the complaint amongst the
       group over the network, as usual, and nodes will be responsible for
@@ -113,5 +130,4 @@ unless that's explicitly indicated.
    is slashed and excluded from further participation. In order for the
    reconstruction to occur, every node but the failing one broadcasts the secret
    share they received from the failure. If any node fails to receive one of
-   these shares, the
-        
+   these shares, 
