@@ -280,6 +280,8 @@ func v2Routes(app services.Application, r *gin.RouterGroup) {
 
 	j := JobSpecsController{app}
 
+	dkg := DKGController{app}
+
 	authv2 := r.Group("/v2", sessionAuthRequired(app.GetStore()))
 	{
 		uc := UserController{app}
@@ -299,6 +301,7 @@ func v2Routes(app services.Application, r *gin.RouterGroup) {
 		authv2.GET("/runs/:RunID", jr.Show)
 
 		authv2.GET("/service_agreements/:SAID", sa.Show)
+		authv2.POST("dkg", dkg.GenerateKey)
 
 		bt := BridgeTypesController{app}
 		authv2.GET("/bridge_types", paginatedRequest(bt.Index))

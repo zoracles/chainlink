@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/manyminds/api2go/jsonapi"
@@ -460,6 +462,47 @@ func (cli *Client) ShowTransaction(c *clipkg.Context) error {
 	defer resp.Body.Close()
 	var tx presenters.Tx
 	return cli.renderAPIResponse(resp, &tx)
+}
+
+var address = regexp.MustCompile("^0x[0-9a-fA-F]{40}")
+
+// DKG returns public key and secret shares from a distributed key generation
+func (cli *Client) DKG(c *clipkg.Context) error {
+	args := c.Args()
+	if len(args) != 2 {
+		return cli.errorOut(fmt.Errorf("Must pass the file containing the peer list and the threshold size"))
+	}
+	peerlistPath := args.First()
+	peerlist, err := ioutil.ReadFile(peerlistPath)
+	if err != nil {
+		return cli.errorOut(errors.Wrapf(err, "Error while reading peerlist file %s", peerlistPath))
+	}
+	peers := strings.Split(string(peerlist), "\n")
+	for _, peer := range peers {
+		if !address.Match([]byte(peer)) {
+			return cli.errorOut(errors.Wrapf(err, "peer %s in peerlist file %s is not an address", peer, peerlistPath))
+		}
+	}
+	threshold, err := strconv.Atoi(args.Get(1))
+	if err != nil {
+		return cli.errorOut(errors.Wrapf(err, "Error while parsing threshold %s", args.Get(1)))
+	}
+	if threshold <= 0 || threshold > len(peers) {
+		return cli.errorOut(errors.Wrapf(err, "threshold %d is not in {1, ...,%d}", threshold, len(peers)))
+	}
+	jsonReq := struct {
+		Peers     []string
+		Threshold int
+	}{peers, threshold}
+	rawReq, err := json.Marshal(jsonReq)
+	if err != nil {
+		cli.errorOut(errors.Wrapf(err, "while converting %v to json", jsonReq))
+	}
+	resp, err := cli.HTTP.Post("/dkg", bytes.NewBufferString(string(rawReq)))
+	if err != nil {
+		return cli.errorOut(errors.Wrapf(err, "while requesting key generation"))
+	}
+	return cli.printResponseBody(resp)
 }
 
 // IndexTxAttempts returns the list of transactions in descending order,

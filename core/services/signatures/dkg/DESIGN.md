@@ -149,3 +149,27 @@ unless that's explicitly indicated.
    3. Once a node has received partial signatures from sufficiently many
       participants, it can construct the signature as described in step 4 of the
       S & S protocol.,
+
+# Initial harness
+
+It would be best to run the participants at least in docker containers. Might as
+well build it into chainlink, I guess. That means that there needs to be a
+database representation of the node data.
+
+But that seems premature. The current task is to simply "Extend ethdss_test
+tests to communicate over libp2p." I could even do that in the current test.
+What would that show, though? In that case, I would do the whole thing as a
+bunch of go routines, I guess. Is there any way to make that part of an
+incremental development?
+
+An advantage of starting with a go-routine-based version would be that it's easy
+to benchmark how big / expensive the calculations will get.
+
+Another issue: I have moved away from the Rabin DKG, and now want to do the
+Pedersen version, because it's much more economical in terms of bandwidth.
+Should I implement DSS using the Pedersen DKG, first??
+
+Let's build this into chainlink, but with a very primitive interface to start
+with. Takes a set of files with the relevant data, and outputs the public key
+and reconstructed private key. Each node running in a docker container. Just a
+straight Pedersen DKG, to start with.

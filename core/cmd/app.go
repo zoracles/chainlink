@@ -259,6 +259,16 @@ func NewApp(client *Client) *cli.App {
 				},
 			},
 		},
+		{
+			Name:  "collaboration",
+			Usage: "Commands for offchain collaboration with other nodes",
+			Subcommands: []cli.Command{
+				{Name: "dkg",
+					Usage: "Collaborate with nodes in <peerlist> to construct a shared <threshold> public/private keypair",
+				},
+			},
+			Action: client.DKG,
+		},
 	}
 
 	if client.Config.Dev() {
