@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/smartcontractkit/chainlink/core/services/signatures/dkg"
 	"github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/assets"
 	"github.com/smartcontractkit/chainlink/core/store/models"
@@ -634,4 +635,12 @@ func (*ExternalInitiatorAuthentication) GetName() string {
 func (ei *ExternalInitiatorAuthentication) SetID(name string) error {
 	ei.Name = name
 	return nil
+}
+
+// SharedKey is used to present the local view of a distributed key.
+type SharedKey struct{}
+
+// NewSharedKey constructs a shared key presenter from dkg.SharedKey data
+func NewSharedKey(k dkg.SharedKey) (SharedKey, error) {
+	return SharedKey{}, nil
 }

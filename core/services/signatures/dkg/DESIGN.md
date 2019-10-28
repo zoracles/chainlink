@@ -173,3 +173,58 @@ Let's build this into chainlink, but with a very primitive interface to start
 with. Takes a set of files with the relevant data, and outputs the public key
 and reconstructed private key. Each node running in a docker container. Just a
 straight Pedersen DKG, to start with.
+
+Should the nodes be running the DHT all the time, in a separate process?
+Probably?
+
+## libp2p
+
+Probably each participant should be running a libp2p service as a matter of
+course. It should contact a boostrap node to particpate in a DHT.
+
+The services it should run are
+
+- DHT lookups. The dht package should do this for me.
+- Request for public key data. Should check that the requester is one of the
+  participants. Probably need some kind of ID for each key generation which is
+  in progress, too. Later, can announce availability of others' key data, and
+  take requests for it.
+- Request for secret share. Should check that the requester matches an address
+  in the peer list, and return the share for that index.
+- Complaint about a bad share.
+- Complaint about a complaint.
+
+In addition, I need a bootstrap node for the DHT. This should probably go in the
+integration directory.
+
+## Key material
+
+All this key material is going to need to be persisted. It should be encrypted
+with the user's username/password, or something similar. Maybe the private key
+for the node?
+
+
+## Stories
+
+1. docker-compose file with bootstrap node. This will require a separate go
+   project, so I can have a separate ~main~ package.
+   
+2. chainlink code which kicks off a go routine for the dht and other services,
+   and adds the bootstrap node.
+   
+3. Add five chainlink nodes to the integration test from story 1.
+
+4. Nodes find each other through the DHT.
+
+5. Nodes request public-key coefficients from each other, for a three-of-five
+   threshold key.
+
+6. Nodes compare public-key coefficients. A node which fails to send
+   coefficients, or sends inconsistent coefficients, is dropped from the protocol.
+   
+7. Nodes request secret shares from each other. A node which fails to send
+   share, or which sends a bad share, is dropped from the protocol.
+   
+8. Nodes construct the same distributed public key from their shares.
+
+9. Three nodes reconstruct the private key from their shares.

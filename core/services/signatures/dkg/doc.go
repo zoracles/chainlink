@@ -21,7 +21,7 @@
 // 2. Each node asks every other node for complaints, and for some summary of
 //    the public data received.
 
-package collaboration
+package dkg
 
 // Risks
 //

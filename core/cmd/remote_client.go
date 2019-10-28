@@ -464,25 +464,32 @@ func (cli *Client) ShowTransaction(c *clipkg.Context) error {
 	return cli.renderAPIResponse(resp, &tx)
 }
 
-var address = regexp.MustCompile("^0x[0-9a-fA-F]{40}")
+func (cli *Client) peersFromPath(path string) ([]string, error) {
+	peerlist, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, cli.errorOut(errors.Wrapf(err, "Error while reading peerlist file %s", path))
+	}
+	peers := strings.Split(string(peerlist), "\n")
+	for _, peer := range peers {
+		if !compressedPublicKey.Match([]byte(peer)) {
+			return nil, cli.errorOut(errors.Wrapf(err,
+				"peer %s in peerlist file %s is not a compressed Public key", peer,
+				path))
+		}
+	}
+	return peers, nil
+}
+
+var compressedPublicKey = regexp.MustCompile("^0x0[01][0-9a-fA-F]{64}$")
+var privateKey = regexp.MustCompile("^0x[0-9a-fA-F]{64}")
 
 // DKG returns public key and secret shares from a distributed key generation
 func (cli *Client) DKG(c *clipkg.Context) error {
 	args := c.Args()
-	if len(args) != 2 {
+	if len(args) < 2 {
 		return cli.errorOut(fmt.Errorf("Must pass the file containing the peer list and the threshold size"))
 	}
-	peerlistPath := args.First()
-	peerlist, err := ioutil.ReadFile(peerlistPath)
-	if err != nil {
-		return cli.errorOut(errors.Wrapf(err, "Error while reading peerlist file %s", peerlistPath))
-	}
-	peers := strings.Split(string(peerlist), "\n")
-	for _, peer := range peers {
-		if !address.Match([]byte(peer)) {
-			return cli.errorOut(errors.Wrapf(err, "peer %s in peerlist file %s is not an address", peer, peerlistPath))
-		}
-	}
+	peers, err := cli.peersFromPath(args.First())
 	threshold, err := strconv.Atoi(args.Get(1))
 	if err != nil {
 		return cli.errorOut(errors.Wrapf(err, "Error while parsing threshold %s", args.Get(1)))
@@ -490,10 +497,7 @@ func (cli *Client) DKG(c *clipkg.Context) error {
 	if threshold <= 0 || threshold > len(peers) {
 		return cli.errorOut(errors.Wrapf(err, "threshold %d is not in {1, ...,%d}", threshold, len(peers)))
 	}
-	jsonReq := struct {
-		Peers     []string
-		Threshold int
-	}{peers, threshold}
+	jsonReq := web.DKGRequest{Peers: peers, Threshold: threshold}
 	rawReq, err := json.Marshal(jsonReq)
 	if err != nil {
 		cli.errorOut(errors.Wrapf(err, "while converting %v to json", jsonReq))

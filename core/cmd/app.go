@@ -260,11 +260,31 @@ func NewApp(client *Client) *cli.App {
 			},
 		},
 		{
-			Name:  "collaboration",
-			Usage: "Commands for offchain collaboration with other nodes",
+			Name:        "collaboration",
+			Aliases:     []string{"threshold"},
+			Description: "Commands for offchain collaboration with other nodes",
 			Subcommands: []cli.Command{
-				{Name: "dkg",
-					Usage: "Collaborate with nodes in <peerlist> to construct a shared <threshold> public/private keypair",
+				{
+					Name:  "dkg",
+					Usage: "TESTING PURPOSES ONLY participate in a distributed key generation",
+					Description: `Opens connections to the peers in <peerlist-path>, and collaborates with them 
+   to construct a distributed key requiring the participation of <threshold>
+   participants to use.`,
+					ArgsUsage: `<peerlist-path> <threshold> <key-path> <password-path>
+
+   <peerlist-path> should contain a list of newline-separated secp256k1 keys
+   identifying the other participants, as 66-character hex strings representing
+   their public keys in compressed format. All participants must have exactly
+   the same peer list, in exactly the same order.
+
+   <threshold> must be positive, and no larger than the number of participants.
+
+	 <key-path>, points to the file containing the secp256k1 private key the node
+   will use to authenticate itself to the other participants, in ethereum
+   keystore format.
+
+   <password-path> points to the file containing the password for unlocking the
+   <key-path>.`,
 				},
 			},
 			Action: client.DKG,
