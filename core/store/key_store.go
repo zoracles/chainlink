@@ -1,13 +1,11 @@
 package store
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
 
-	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -15,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/utils"
@@ -24,8 +23,9 @@ import (
 // KeyStore manages a key storage directory on disk.
 type KeyStore struct {
 	*keystore.KeyStore
-	keysDir  string // Path to directory containing ethereum key material
-	PrivKeys map[common.Address]*ecdsa.PrivateKey
+	keysDir                     string // Path to directory containing ethereum key material
+	PrivKeysByAddress           map[common.Address]*models.PrivateKey
+	PrivKeysByCompressedPubKeys map[models.CompressedPubKey]*models.PrivateKey
 }
 
 // NewKeyStore creates a keystore for the given directory.
@@ -35,7 +35,12 @@ func NewKeyStore(keyDir string) *KeyStore {
 		keystore.StandardScryptN,
 		keystore.StandardScryptP,
 	)
-	return &KeyStore{ks, keyDir, make(map[common.Address]*ecdsa.PrivateKey)}
+	return &KeyStore{
+		KeyStore:                    ks,
+		keysDir:                     keyDir,
+		PrivKeysByAddress:           make(map[common.Address]*models.PrivateKey),
+		PrivKeysByCompressedPubKeys: make(map[models.CompressedPubKey]*models.PrivateKey),
+	}
 }
 
 // HasAccounts returns true if there are accounts located at the keystore
@@ -46,7 +51,7 @@ func (ks *KeyStore) HasAccounts() bool {
 
 // privateKey searches ks.keysDir for key material matching account a, and
 // attempts to decrypt it and return the corresponding private key.
-func (ks *KeyStore) keyDataFor(a accounts.Account, phrase string) (*ecdsa.PrivateKey, error) {
+func (ks *KeyStore) keyDataFor(a accounts.Account, phrase string) (*models.PrivateKey, error) {
 	keyFiles, err := ioutil.ReadDir(ks.keysDir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while trying to list key files in %s", ks.keysDir)
@@ -65,7 +70,7 @@ func (ks *KeyStore) keyDataFor(a accounts.Account, phrase string) (*ecdsa.Privat
 			if a.Address != crypto.PubkeyToAddress(key.PrivateKey.PublicKey) {
 				return nil, fmt.Errorf("purported key material for %s has wrong address", a.Address)
 			}
-			return key.PrivateKey, nil
+			return (*models.PrivateKey)(key.PrivateKey), nil
 		}
 	}
 	return nil, fmt.Errorf("failed to find key file for %s", a.Address)
@@ -87,7 +92,8 @@ func (ks *KeyStore) Unlock(phrase string) error {
 		if err != nil {
 			return errors.Wrapf(err, "while retrieving key material")
 		}
-		ks.PrivKeys[account.Address] = key
+		ks.PrivKeysByAddress[account.Address] = key
+		ks.PrivKeysByCompressedPubKeys[models.Compressed(key.PublicKey)] = key
 	}
 	return merr
 }

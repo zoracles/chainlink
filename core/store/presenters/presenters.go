@@ -637,10 +637,9 @@ func (ei *ExternalInitiatorAuthentication) SetID(name string) error {
 	return nil
 }
 
-// SharedKey is used to present the local view of a distributed key.
-type SharedKey struct{}
+type SharedKey dkg.SharedKey
 
-// NewSharedKey constructs a shared key presenter from dkg.SharedKey data
-func NewSharedKey(k dkg.SharedKey) (SharedKey, error) {
+// NewSharedKey is XXX: Fill this in.
+func NewSharedKey(k *dkg.SharedKey) (SharedKey, error) {
 	return SharedKey{}, nil
 }

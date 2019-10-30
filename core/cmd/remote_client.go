@@ -497,7 +497,11 @@ func (cli *Client) DKG(c *clipkg.Context) error {
 	if threshold <= 0 || threshold > len(peers) {
 		return cli.errorOut(errors.Wrapf(err, "threshold %d is not in {1, ...,%d}", threshold, len(peers)))
 	}
-	jsonReq := web.DKGRequest{Peers: peers, Threshold: threshold}
+	return nil
+}
+
+func sendDKGRequest(cli *Client, peers []string, threshold int) error {
+	jsonReq := web.DKGRequest{Peers: peers, Threshold: uint(threshold)}
 	rawReq, err := json.Marshal(jsonReq)
 	if err != nil {
 		cli.errorOut(errors.Wrapf(err, "while converting %v to json", jsonReq))
