@@ -26,7 +26,9 @@ participants' performances. This could be combined with the original message
 just by hashing the concatenation of the hashes of the two messages. This
 lengthens the signatures (you have to send the hash of the performance message
 along, for verifiers who only want to verify the original message), but does
-lead to a much simpler protocol.
+lead to a much simpler protocol. It would allow for accountability up to
+generation of the ephemeral key, which is the most expensive part. It could not
+be used for the construction of the actual signature, obviously.
 
 ## Intended full workflow
 
