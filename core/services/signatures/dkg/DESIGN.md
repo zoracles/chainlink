@@ -57,8 +57,8 @@ unless that's explicitly indicated.
 2. Nodes contact each other through a DHT, looking up the other participants'
    host info via their public keys. Chainlink will run a bootstrap node for
    this DHT.
-3. Every node requests the public keys of the coefficients (*Aᵢₖ=aᵢₖG*, in
-   section 2.4, step 3 of [Stinson and Strobl 2001
+3. <a href="coefficient-request"> Every node requests the public keys of the
+   coefficients (*Aᵢₖ=aᵢₖG*, in section 2.4, step 3 of [Stinson and Strobl 2001
    ](https://www.researchgate.net/profile/Willy_Susilo/publication/242499559_Information_Security_and_Privacy_13th_Australasian_Conference_ACISP_2008_Wollongong_Australia_July_7-9_2008_Proceedings/links/00b495314f3bcaaa46000000.pdf#page=426))
    of every other node.
    1. In the happy path, the nodes comply with these requests, sending the same
@@ -248,3 +248,5 @@ agreements.
 7. Nodes construct the same distributed public key from their shares.
 
 8. Three nodes reconstruct the private key from their shares.
+
+Chainlink nodes in DKG interaction share public-key coefficients with each other
