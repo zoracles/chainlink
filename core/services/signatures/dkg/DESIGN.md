@@ -1,3 +1,13 @@
+<!-- This document is best read as HTML rendered from the markdown. 
+
+It contains some italicized mathematical notation, and the asterices in the
+markdown syntax for italicization are a bit confusing, in the raw text.
+
+E.g. "*Aᵢₖ=aᵢₖG*" means "Aᵢₖ=aᵢₖG", with all the roman characters italicized. 
+
+To render as HTML locally, "pip install grip", then open localhost:6419.
+-->
+
 # Network interactions for distributed key generation
 
 This describes the network messages participants must send each other, to
@@ -177,7 +187,8 @@ and reconstructed private key. Each node running in a docker container. Just a
 straight Pedersen DKG, to start with.
 
 Should the nodes be running the DHT all the time, in a separate process?
-Probably?
+Probably? (I discussed this with Steve, and he agrees that this can be part of
+the standard chainlink startup process.)
 
 ## libp2p
 
@@ -203,30 +214,37 @@ integration directory.
 
 All this key material is going to need to be persisted. It should be encrypted
 with the user's username/password, or something similar. Maybe the private key
-for the node?
+for the node? It can probably safely encrypt with the [elgamal package](
+https://godoc.org/golang.org/x/crypto/openpgp/elgamal).
 
 
 ## Stories
 
-1. docker-compose file with bootstrap node. This will require a separate go
-   project, so I can have a separate ~main~ package.
+Going to develop this "outside in", to try to avoid the pain we had with service
+agreements.
+
+1. Bootstrap node. Starts up a DHT service, can record the network location (ip
+   address?) associated with a public key.
+
+   `docker-compose` file with bootstrap node. This will require a separate go
+   project, so I can have a separate `main` package. This is going in threshold,
+   in the root directory.
    
 2. chainlink code which kicks off a go routine for the dht and other services,
-   and adds the bootstrap node.
+   and adds the bootstrap node to report its location.
    
-3. Add five chainlink nodes to the integration test from story 1.
+3. Add five chainlink nodes from story 2 to the integration test from story 1.
+   Nodes find each other through the DHT.
 
-4. Nodes find each other through the DHT.
-
-5. Nodes request public-key coefficients from each other, for a three-of-five
+4. Nodes request public-key coefficients from each other, for a three-of-five
    threshold key.
 
-6. Nodes compare public-key coefficients. A node which fails to send
+5. Nodes compare public-key coefficients. A node which fails to send
    coefficients, or sends inconsistent coefficients, is dropped from the protocol.
    
-7. Nodes request secret shares from each other. A node which fails to send
+6. Nodes request secret shares from each other. A node which fails to send
    share, or which sends a bad share, is dropped from the protocol.
    
-8. Nodes construct the same distributed public key from their shares.
+7. Nodes construct the same distributed public key from their shares.
 
-9. Three nodes reconstruct the private key from their shares.
+8. Three nodes reconstruct the private key from their shares.
