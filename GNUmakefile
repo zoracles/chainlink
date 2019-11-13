@@ -45,7 +45,7 @@ gomod: ## Ensure chainlink's go dependencies are installed.
 
 .PHONY: yarndep
 yarndep: ## Ensure the frontend's dependencies are installed.
-	yarn install --frozen-lockfile
+	yarn install --frozen-lockfile --prod=true --ignore-optional --network-timeout 10000000
 
 .PHONY: install-chainlink
 install-chainlink: chainlink ## Install the chainlink binary.
