@@ -111,7 +111,8 @@ func (cli *Client) DeleteExternalInitiator(c *clipkg.Context) error {
 		return cli.errorOut(err)
 	}
 	defer resp.Body.Close()
-	return nil
+	var exi models.ExternalInitiator
+	return cli.renderAPIResponse(resp, &exi)
 }
 
 // ShowJobRun returns the status of the given Jobrun.
