@@ -1,16 +1,20 @@
 pragma solidity 0.6.2;
 
 import "./FluxAggregator.sol";
-import "./Whitelisted.sol";
 
 /**
  * @title Whitelisted Prepaid Aggregator contract
  * @notice This contract requires addresses to be added to a whitelist
  * in order to read the answers stored in the FluxAggregator contract
  */
-contract WhitelistedAggregator is FluxAggregator, Whitelisted {
+contract WhitelistedAggregator is FluxAggregator {
+
+  address private whitelistedContract;
+  bool public whitelistEnabled;
+  mapping(address => bool) public whitelisted;
 
   constructor(
+    address _whitelisted,
     address _link,
     uint128 _paymentAmount,
     uint32 _timeout,
@@ -22,7 +26,39 @@ contract WhitelistedAggregator is FluxAggregator, Whitelisted {
     _timeout,
     _decimals,
     _description
-  ){}
+  ){
+    whitelistedContract = _whitelisted;
+  }
+
+  function addToWhitelist(address _user) external {
+    (bool status,) = whitelistedContract.delegatecall(abi.encodeWithSelector(this.addToWhitelist.selector, _user));
+    require(status);
+  }
+
+  function removeFromWhitelist(address _user) external {
+    (bool status,) = whitelistedContract.delegatecall(abi.encodeWithSelector(this.removeFromWhitelist.selector, _user));
+    require(status);
+  }
+
+  /**
+   * @notice makes the whitelist check enforced
+   */
+  function enableWhitelist()
+    external
+  {
+    (bool status,) = whitelistedContract.delegatecall(abi.encodeWithSelector(this.enableWhitelist.selector));
+    require(status);
+  }
+
+  /**
+   * @notice makes the whitelist check unenforced
+   */
+  function disableWhitelist()
+    external
+  {
+    (bool status,) = whitelistedContract.delegatecall(abi.encodeWithSelector(this.disableWhitelist.selector));
+    require(status);
+  }
 
   /**
    * @notice get the most recently reported answer
@@ -80,5 +116,10 @@ contract WhitelistedAggregator is FluxAggregator, Whitelisted {
     returns (uint256)
   {
     return _getTimestamp(_roundId);
+  }
+
+  modifier isWhitelisted() {
+    require(whitelisted[msg.sender] || !whitelistEnabled, "Not whitelisted");
+    _;
   }
 }

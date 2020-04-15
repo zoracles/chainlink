@@ -6,9 +6,11 @@ import {
 } from '@chainlink/test-helpers'
 import { assert } from 'chai'
 import { WhitelistedAggregatorFactory } from '../../ethers/v0.6/WhitelistedAggregatorFactory'
+import { WhitelistedFactory } from '../../ethers/v0.6/WhitelistedFactory'
 
-const aggregatorFactory = new WhitelistedAggregatorFactory()
 const linkTokenFactory = new contract.LinkTokenFactory()
+const whitelistedFactory = new WhitelistedFactory()
+const aggregatorFactory = new WhitelistedAggregatorFactory()
 const provider = setup.provider()
 let personas: setup.Personas
 beforeAll(async () => {
@@ -31,9 +33,13 @@ describe('WhitelistedAggregator', () => {
   let nextRound: number
   const deployment = setup.snapshot(provider, async () => {
     link = await linkTokenFactory.connect(personas.Default).deploy()
+    const whitelisted = await whitelistedFactory
+      .connect(personas.Default)
+      .deploy()
     aggregator = await (aggregatorFactory as any)
       .connect(personas.Carol)
       .deploy(
+        whitelisted.address,
         link.address,
         paymentAmount,
         timeout,
