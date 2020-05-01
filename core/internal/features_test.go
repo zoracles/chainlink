@@ -983,12 +983,16 @@ func TestIntegration_FluxMonitor_NewRound(t *testing.T) {
 	var job models.JobSpec
 	err := json.Unmarshal(buffer, &job)
 	require.NoError(t, err)
+	frequency := models.MustMakeDuration(15 * time.Second)
 	job.Initiators[0].InitiatorParams.Feeds = cltest.JSONFromString(t, fmt.Sprintf(`["%s"]`, mockServer.URL))
-	job.Initiators[0].InitiatorParams.PollTimer.Frequency = models.MustMakeDuration(15 * time.Second)
+	job.Initiators[0].InitiatorParams.PollTimer.Frequency = frequency
 	job.Initiators[0].InitiatorParams.IdleTimer.Disabled = true
+	job.Initiators[0].InitiatorParams.IdleTimer.Duration = models.MustMakeDuration(0)
 
 	j := cltest.CreateJobSpecViaWeb(t, app, job)
 	_ = cltest.WaitForRuns(t, j, app.Store, 0)
+	initr, err := app.Store.FindInitiator(j.Initiators[0].ID)
+	assert.Equal(t, frequency, initr.InitiatorParams.PollTimer.Frequency)
 
 	eth.EventuallyAllCalled(t)
 

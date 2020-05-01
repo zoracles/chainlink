@@ -230,9 +230,113 @@ type PollTimerConfig struct {
 	Frequency Duration `json:"frequency,omitempty"`
 }
 
+// Value is defined so that we can store PollTimerConfig as JSONB, because
+// of an error with GORM where it has trouble with nested structs as JSONB.
+// See https://github.com/jinzhu/gorm/issues/2704
+func (ptc PollTimerConfig) Value() (driver.Value, error) {
+	b, err := json.Marshal(ptc)
+	if err != nil {
+		return nil, err
+	}
+	return b, err
+}
+
+// Scan is defined so that we can read PollTimerConfig as JSONB, because
+// of an error with GORM where it has trouble with nested structs as JSONB.
+// See https://github.com/jinzhu/gorm/issues/2704
+func (ptc *PollTimerConfig) Scan(value interface{}) error {
+	if value == nil {
+		*ptc = PollTimerConfig{}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("Invalid Scan Source")
+	}
+	return json.Unmarshal(b, ptc)
+}
+
+//MarshalJSON implements the json.Marshaler interface.
+func (ptc PollTimerConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(pollTimerConfig{
+		Disabled:  ptc.Disabled,
+		Frequency: int64(ptc.Frequency.Duration()),
+	})
+}
+
+//UnmarshalJSON implements the json.Unmarshaler interface.
+func (ptc *PollTimerConfig) UnmarshalJSON(input []byte) error {
+	temp := pollTimerConfig{}
+	if err := json.Unmarshal(input, &temp); err != nil {
+		return err
+	}
+	*ptc = PollTimerConfig{
+		Disabled:  temp.Disabled,
+		Frequency: MustMakeDuration(time.Duration(temp.Frequency)),
+	}
+	return nil
+}
+
+type pollTimerConfig struct {
+	Disabled  bool  `json:"disabled"`
+	Frequency int64 `json:"frequency"`
+}
+
 type IdleTimerConfig struct {
 	Disabled bool     `json:"disabled,omitempty"`
 	Duration Duration `json:"duration,omitempty"`
+}
+
+// Value is defined so that we can store IdleTimerConfig as JSONB, because
+// of an error with GORM where it has trouble with nested structs as JSONB.
+// See https://github.com/jinzhu/gorm/issues/2704
+func (itc IdleTimerConfig) Value() (driver.Value, error) {
+	b, err := json.Marshal(itc)
+	if err != nil {
+		return nil, err
+	}
+	return b, err
+}
+
+// Scan is defined so that we can read IdleTimerConfig as JSONB, because
+// of an error with GORM where it has trouble with nested structs as JSONB.
+// See https://github.com/jinzhu/gorm/issues/2704
+func (itc *IdleTimerConfig) Scan(value interface{}) error {
+	if value == nil {
+		*itc = IdleTimerConfig{}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("Invalid Scan Source")
+	}
+	return json.Unmarshal(b, itc)
+}
+
+//MarshalJSON implements the json.Marshaler interface.
+func (itc IdleTimerConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(idleTimerConfig{
+		Disabled: itc.Disabled,
+		Duration: int64(itc.Duration.Duration()),
+	})
+}
+
+//UnmarshalJSON implements the json.Unmarshaler interface.
+func (itc *IdleTimerConfig) UnmarshalJSON(input []byte) error {
+	temp := idleTimerConfig{}
+	if err := json.Unmarshal(input, &temp); err != nil {
+		return err
+	}
+	*itc = IdleTimerConfig{
+		Disabled: temp.Disabled,
+		Duration: MustMakeDuration(time.Duration(temp.Duration)),
+	}
+	return nil
+}
+
+type idleTimerConfig struct {
+	Disabled bool  `json:"disabled"`
+	Duration int64 `json:"duration"`
 }
 
 // Topics handle the serialization of ethereum log topics to and from the data store.
