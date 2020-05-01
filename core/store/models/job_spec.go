@@ -260,7 +260,7 @@ func (ptc *PollTimerConfig) Scan(value interface{}) error {
 func (ptc PollTimerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(pollTimerConfig{
 		Disabled:  ptc.Disabled,
-		Frequency: int64(ptc.Frequency.Duration()),
+		Frequency: ptc.Frequency,
 	})
 }
 
@@ -272,14 +272,14 @@ func (ptc *PollTimerConfig) UnmarshalJSON(input []byte) error {
 	}
 	*ptc = PollTimerConfig{
 		Disabled:  temp.Disabled,
-		Frequency: MustMakeDuration(time.Duration(temp.Frequency)),
+		Frequency: temp.Frequency,
 	}
 	return nil
 }
 
 type pollTimerConfig struct {
-	Disabled  bool  `json:"disabled"`
-	Frequency int64 `json:"frequency"`
+	Disabled  bool     `json:"disabled"`
+	Frequency Duration `json:"frequency"`
 }
 
 type IdleTimerConfig struct {
@@ -317,7 +317,7 @@ func (itc *IdleTimerConfig) Scan(value interface{}) error {
 func (itc IdleTimerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(idleTimerConfig{
 		Disabled: itc.Disabled,
-		Duration: int64(itc.Duration.Duration()),
+		Duration: itc.Duration,
 	})
 }
 
@@ -329,14 +329,14 @@ func (itc *IdleTimerConfig) UnmarshalJSON(input []byte) error {
 	}
 	*itc = IdleTimerConfig{
 		Disabled: temp.Disabled,
-		Duration: MustMakeDuration(time.Duration(temp.Duration)),
+		Duration: temp.Duration,
 	}
 	return nil
 }
 
 type idleTimerConfig struct {
-	Disabled bool  `json:"disabled"`
-	Duration int64 `json:"duration"`
+	Disabled bool     `json:"disabled"`
+	Duration Duration `json:"duration"`
 }
 
 // Topics handle the serialization of ethereum log topics to and from the data store.

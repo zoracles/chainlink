@@ -990,10 +990,13 @@ func TestIntegration_FluxMonitor_NewRound(t *testing.T) {
 	job.Initiators[0].InitiatorParams.IdleTimer.Duration = models.MustMakeDuration(0)
 
 	j := cltest.CreateJobSpecViaWeb(t, app, job)
-	_ = cltest.WaitForRuns(t, j, app.Store, 0)
+	j, err = app.Store.FindJob(j.ID)
+	require.NoError(t, err)
 	initr, err := app.Store.FindInitiator(j.Initiators[0].ID)
+	require.NoError(t, err)
 	assert.Equal(t, frequency, initr.InitiatorParams.PollTimer.Frequency)
 
+	_ = cltest.WaitForRuns(t, j, app.Store, 0)
 	eth.EventuallyAllCalled(t)
 
 	// Send a NewRound log event to trigger a run.
