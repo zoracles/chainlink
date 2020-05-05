@@ -477,7 +477,7 @@ func ParseJSONAPIErrors(t testing.TB, body io.Reader) *models.JSONAPIErrors {
 	b, err := ioutil.ReadAll(body)
 	require.NoError(t, err)
 	var respJSON models.JSONAPIErrors
-	json.Unmarshal(b, &respJSON)
+	require.NoError(t, json.Unmarshal(b, &respJSON))
 	return &respJSON
 }
 
@@ -1096,7 +1096,7 @@ func UnauthenticatedPost(t testing.TB, url string, body io.Reader, headers map[s
 	}
 	resp, err := client.Do(request)
 	require.NoError(t, err)
-	return resp, func() { resp.Body.Close() }
+	return resp, func() { logger.ErrorIf(resp.Body.Close()) }
 }
 
 func UnauthenticatedPatch(t testing.TB, url string, body io.Reader, headers map[string]string) (*http.Response, func()) {
@@ -1111,7 +1111,7 @@ func UnauthenticatedPatch(t testing.TB, url string, body io.Reader, headers map[
 	}
 	resp, err := client.Do(request)
 	require.NoError(t, err)
-	return resp, func() { resp.Body.Close() }
+	return resp, func() { logger.ErrorIf(resp.Body.Close()) }
 }
 
 func MustParseDuration(t testing.TB, durationStr string) time.Duration {

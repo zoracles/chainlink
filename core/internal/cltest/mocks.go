@@ -584,7 +584,8 @@ func NewHTTPMockServer(
 		called = true
 
 		w.WriteHeader(status)
-		io.WriteString(w, response)
+		_, err = io.WriteString(w, response)
+		assert.NoError(t, err)
 	})
 
 	server := httptest.NewServer(handler)
@@ -599,7 +600,8 @@ func NewHTTPMockServerWithAlterableResponse(
 	server = httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			io.WriteString(w, response())
+			_, err := io.WriteString(w, response())
+			logger.ErrorIf(err)
 		}))
 	return server
 }

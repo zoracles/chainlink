@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smartcontractkit/chainlink/core/logger"
+
 	"github.com/smartcontractkit/chainlink/core/store/dbutil"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/store/orm"
@@ -62,7 +64,7 @@ func createTestDB(t testing.TB, parsed *url.URL) *url.URL {
 	if err != nil {
 		t.Fatalf("unable to open postgres database for creating test db: %+v", err)
 	}
-	defer db.Close()
+	defer logger.ErrorIfCalling(db.Close)
 
 	//`CREATE DATABASE $1` does not seem to work w CREATE DATABASE
 	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
@@ -80,7 +82,7 @@ func reapPostgresChildDB(t testing.TB, parentURL, testURL *url.URL) {
 	if err != nil {
 		t.Fatalf("Unable to connect to parent CL db to clean up test database: %v", err)
 	}
-	defer db.Close()
+	defer logger.ErrorIfCalling(db.Close)
 
 	testdb := testURL.Path[1:]
 	dbsSQL := "DROP DATABASE " + testdb

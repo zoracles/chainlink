@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/smartcontractkit/chainlink/core/logger"
 	"math/big"
 
 	"github.com/smartcontractkit/chainlink/core/utils"
@@ -50,7 +51,8 @@ func (s Signature) String() string {
 
 // Format implements fmt.Formatter
 func (s Signature) Format(state fmt.State, c rune) {
-	fmt.Fprintf(state, "%"+string(c), s.String())
+	_, err := fmt.Fprintf(state, "%"+string(c), s.String())
+	logger.ErrorIf(err)
 }
 
 // SetBytes assigns the byte array to the signature

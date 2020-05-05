@@ -33,7 +33,7 @@ type SimulatedBackendClient struct {
 
 // Close terminates the underlying blockchain's update loop.
 func (c *SimulatedBackendClient) Close() {
-	c.b.Close()
+	logger.ErrorIf(c.b.Close())
 }
 
 var _ eth.Client = (*SimulatedBackendClient)(nil)
