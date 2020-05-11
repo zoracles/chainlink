@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/store/models"
-
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/eth"
 	"github.com/smartcontractkit/chainlink/core/services/eth/contracts"
+	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/smartcontractkit/chainlink/core/utils"
 )
 
 func ExportedSetCheckerFactory(fm Service, fac DeviationCheckerFactory) {
@@ -29,16 +28,16 @@ func (p *PollingDeviationChecker) ExportedPollIfEligible(threshold, absoluteThre
 	return p.pollIfEligible(DeviationThresholds{Rel: threshold, Abs: absoluteThreshold})
 }
 
-func (p *PollingDeviationChecker) ExportedSetStoredReportableRoundID(roundID *big.Int) {
-	p.reportableRoundID = roundID
-}
-
 func (p *PollingDeviationChecker) ExportedRespondToNewRoundLog(log *contracts.LogNewRound) {
 	p.respondToNewRoundLog(*log)
 }
 
-func ExportedConsumeLogBroadcast(lb eth.LogBroadcast, callback func()) {
-	consumeLogBroadcast(lb, callback)
+func (p *PollingDeviationChecker) ExportedProcessLogs() {
+	p.processLogs()
+}
+
+func (p *PollingDeviationChecker) ExportedBacklog() *utils.BoundedPriorityQueue {
+	return p.backlog
 }
 
 func mustReadFile(t testing.TB, file string) string {
@@ -97,13 +96,20 @@ func dataWithResult(t *testing.T, result decimal.Decimal) adapterResponseData {
 // XXXTestingOnlyCreateJob is used in TestFluxMonitorAntiSpamLogic to create a
 // job with a specific answer and round, for testing nodes with malicious
 // behavior
-func (fm *concreteFluxMonitor) XXXTestingOnlyCreateJob(t *testing.T,
-	jobSpecId *models.ID, polledAnswer decimal.Decimal,
-	nextRound *big.Int) error {
+func (fm *concreteFluxMonitor) XXXTestingOnlyCreateJob(
+	t *testing.T,
+	jobSpecId *models.ID,
+	polledAnswer decimal.Decimal,
+	nextRound *big.Int,
+) error {
 	jobSpec, err := fm.store.ORM.FindJob(jobSpecId)
 	require.NoError(t, err, "could not find job spec with that ID")
-	checker, err := fm.checkerFactory.New(jobSpec.Initiators[0], fm.runManager,
-		fm.store.ORM, models.MustMakeDuration(100*time.Second))
+	checker, err := fm.checkerFactory.New(
+		jobSpec.Initiators[0],
+		fm.runManager,
+		fm.store.ORM,
+		models.MustMakeDuration(100*time.Second),
+	)
 	require.NoError(t, err, "could not create deviation checker")
-	return checker.(*PollingDeviationChecker).createJobRun(polledAnswer, nextRound)
+	return checker.(*PollingDeviationChecker).createJobRun(polledAnswer, uint32(nextRound.Uint64()))
 }
