@@ -196,11 +196,13 @@ func TestRandomnessRequestLog(t *testing.T) {
 	require.NoError(t, err, "failure while using VRFCoordinator to calculate actual VRF input seed")
 	assert.True(t, actualSeed.Cmp(log.Seed) == 0,
 		"VRFCoordinator logged wrong actual input seed from randomness request")
-	golangSeed := utils.MustHash(string(append(append(append(
+	blockNum := coord.backend.Blockchain().CurrentBlock().NumberU64() - 1
+	golangSeed := utils.MustHash(string(append(append(append(append(
 		keyHash[:],
 		common.BigToHash(rawSeed).Bytes()...),
 		coord.consumerContractAddress.Hash().Bytes()...),
-		common.BigToHash(nonce).Bytes()...)))
+		common.BigToHash(nonce).Bytes()...),
+		coord.backend.Blockchain().GetBlockByNumber(blockNum).Hash().Bytes()...)))
 	assert.Equal(t, golangSeed, common.BigToHash((log.Seed)), "VRFCoordinator logged different actual input seed than expected by golang code!")
 	assert.Equal(t, jobID, log.JobID, "VRFCoordinator logged different JobID from randomness request!")
 	assert.Equal(t, coord.consumerContractAddress, log.Sender, "VRFCoordinator logged different requester address from randomness request!")
