@@ -10,7 +10,6 @@ import (
 	"github.com/smartcontractkit/chainlink/core/eth"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/store"
 	strpkg "github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/store/orm"
@@ -133,7 +132,7 @@ func TestTxManager_CreateTx_RoundRobinSuccess(t *testing.T) {
 	ethClient.On("SendRawTx", mock.Anything).Return(cltest.NewHash(), nil)
 
 	createdTx2, err := manager.CreateTx(to, data)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.NotEqual(t, createdTx1.From.Hex(), createdTx2.From.Hex(), "should come from a different account")
 
 	ethClient.AssertExpectations(t)
@@ -949,7 +948,7 @@ func TestTxManager_ReloadNonce(t *testing.T) {
 	t.Parallel()
 
 	ethClient := new(mocks.Client)
-	txm := store.NewEthTxManager(
+	txm := strpkg.NewEthTxManager(
 		ethClient,
 		orm.NewConfig(),
 		nil,
@@ -958,7 +957,7 @@ func TestTxManager_ReloadNonce(t *testing.T) {
 
 	from := common.HexToAddress("0xbf4ed7b27f1d666546e30d74d50d173d20bca754")
 	account := accounts.Account{Address: from}
-	ma := store.NewManagedAccount(account, 0)
+	ma := strpkg.NewManagedAccount(account, 0)
 
 	nonce := uint64(234)
 	ethClient.On("GetNonce", from).Return(nonce, nil)

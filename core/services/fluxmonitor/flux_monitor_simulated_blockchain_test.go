@@ -115,6 +115,7 @@ func deployFluxAggregator(t *testing.T, paymentAmount int64, timeout uint32,
 	oracleList := []common.Address{f.neil.From, f.ned.From, f.nallory.From}
 	_, err = f.aggregatorContract.AddOracles(
 		f.sergey, oracleList, oracleList, 2, 3, 2)
+	assert.NoError(t, err, "failed to add oracles to aggregator")
 	f.backend.Commit()
 	iaddedLogs, err := f.aggregatorContract.FilterOraclePermissionsUpdated(
 		nil, oracleList, []bool{true})

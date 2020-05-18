@@ -107,11 +107,11 @@ func (wrapper *lazyRPCWrapper) Subscribe(ctx context.Context, channel interface{
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	newCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	wrapper.limiter.Wait(ctx)
+	wrapper.limiter.Wait(newCtx)
 
-	return wrapper.client.EthSubscribe(ctx, channel, args...)
+	return wrapper.client.EthSubscribe(newCtx, channel, args...)
 }
 
 // Dialer implements Dial which is a function that creates a client for that url

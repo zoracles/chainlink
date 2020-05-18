@@ -503,6 +503,7 @@ func TestLogBroadcaster_ReceivesAllLogsWhenResubscribing(t *testing.T) {
 			var recvd []*eth.Log
 
 			handleLog := func(lb ethsvc.LogBroadcast, err error) {
+				require.NoError(t, err)
 				consumed, err := lb.WasAlreadyConsumed()
 				require.NoError(t, err)
 				if !consumed {
@@ -649,6 +650,7 @@ func TestLogBroadcaster_InjectsLogConsumptionRecordFunctions(t *testing.T) {
 	job := createJob(t, store)
 	logListener := simpleLogListener{
 		func(lb ethsvc.LogBroadcast, err error) {
+			require.NoError(t, err)
 			consumed, err := lb.WasAlreadyConsumed()
 			require.NoError(t, err)
 			require.False(t, consumed)

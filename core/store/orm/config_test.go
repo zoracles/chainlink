@@ -98,9 +98,11 @@ func TestStore_addressParser(t *testing.T) {
 
 	val, err = parseAddress("0x0")
 	assert.Error(t, err)
+	assert.Nil(t, val)
 
 	val, err = parseAddress("x")
 	assert.Error(t, err)
+	assert.Nil(t, val)
 }
 
 func TestStore_bigIntParser(t *testing.T) {
@@ -114,9 +116,11 @@ func TestStore_bigIntParser(t *testing.T) {
 
 	val, err = parseBigInt("x")
 	assert.Error(t, err)
+	assert.Nil(t, val)
 
 	val, err = parseBigInt("")
 	assert.Error(t, err)
+	assert.Nil(t, val)
 }
 
 func TestStore_levelParser(t *testing.T) {
@@ -130,6 +134,7 @@ func TestStore_levelParser(t *testing.T) {
 
 	val, err = parseLogLevel("primus sucks")
 	assert.Error(t, err)
+	assert.Equal(t, val, LogLevel{})
 }
 
 func TestStore_urlParser(t *testing.T) {
