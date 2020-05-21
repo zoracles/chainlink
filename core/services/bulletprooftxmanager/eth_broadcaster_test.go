@@ -29,64 +29,6 @@ func TestTxBroadcaster_NewBulletproofTxManager(t *testing.T) {
 	// TODO: write this test
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testing.T) {
-	store1, cleanup := cltest.NewStore(t)
-	defer cleanup()
-	// Use the real KeyStore loaded from database fixtures
-	store1.KeyStore.Unlock(cltest.Password)
-
-	config, cleanup := cltest.NewConfig(t)
-	gethClient := new(mocks.GethClient)
-	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-	eb1 := bulletprooftxmanager.NewEthBroadcaster(store1, gethWrapper, config)
-
-	keys, err := store1.Keys()
-	require.NoError(t, err)
-	key := keys[0]
-	defaultFromAddress := key.Address.Address()
-	toAddress := gethCommon.HexToAddress("0x6C03DDA95a2AEd917EeCc6eddD4b9D16E6380411")
-	value := assets.NewEthValue(142)
-	gasLimit := uint64(242)
-
-	chSendingTx := make(chan bool)
-	chFinish := make(chan struct{})
-
-	etx := models.EthTransaction{
-		FromAddress:    defaultFromAddress,
-		ToAddress:      toAddress,
-		EncodedPayload: []byte{42, 42, 0},
-		Value:          value,
-		GasLimit:       gasLimit,
-		CreatedAt:      time.Unix(0, 0),
-	}
-	gethClient.On("SendTransaction", mock.Anything, mock.MatchedBy(func(tx *gethTypes.Transaction) bool {
-		chSendingTx <- true
-		<-chFinish
-		return true
-	})).Return(nil).Once()
-
-	require.NoError(t, store1.GetRawDB().Save(&etx).Error)
-
-	// First one gets the lock
-	go func() {
-		require.NoError(t, eb1.ProcessUnbroadcastEthTransactions(*key))
-	}()
-
-	// Wait until first one is in the middle of its run
-	<-chSendingTx
-
-	// Simulate another node
-	store2, cleanup := cltest.NewStore(t)
-	defer cleanup()
-	eb2 := bulletprooftxmanager.NewEthBroadcaster(store2, gethWrapper, config)
-
-	// Second attempt to get lock fails
-	require.EqualError(t, eb2.ProcessUnbroadcastEthTransactions(*key), fmt.Sprintf("could not get advisory lock for key %v", key.ID))
-
-	// Resume original run
-	close(chFinish)
-}
-
 func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testing.T) {
 	store, cleanup := cltest.NewStore(t)
 	defer cleanup()
@@ -685,8 +627,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 		require.Equal(t, int64(2), finalNextNonce)
 	})
 
-	t.Run("geth client returns an error in the unretryable errors category", func(t *testing.T) {
-		unretryableErrorExample := "exceeds block gas limit"
+	t.Run("geth client returns an error in the fatal errors category", func(t *testing.T) {
+		fatalErrorExample := "exceeds block gas limit"
 		localNextNonce := getLocalNextNonce(t, store, defaultFromAddress)
 
 		etx := models.EthTransaction{
@@ -700,7 +642,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 
 		gethClient.On("SendTransaction", mock.Anything, mock.MatchedBy(func(tx *gethTypes.Transaction) bool {
 			return tx.Nonce() == localNextNonce
-		})).Return(errors.New(unretryableErrorExample)).Once()
+		})).Return(errors.New(fatalErrorExample)).Once()
 
 		// Do the thing
 		require.NoError(t, eb.ProcessUnbroadcastEthTransactions(*key))
@@ -856,10 +798,6 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 
 		gethClient.AssertExpectations(t)
 	})
-
-	// TODO:
-	// - "replacement transaction underpriced"
-	// - 'nonce too high'
 }
 
 func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_KeystoreErrors(t *testing.T) {
@@ -966,8 +904,64 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_KeystoreErrors(t
 	gethClient.AssertExpectations(t)
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ComplexTest(t *testing.T) {
-	// Multiple tx's, some of which fail with different errors on multiple occasions over multiple calls
+func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testing.T) {
+	store1, cleanup := cltest.NewStore(t)
+	defer cleanup()
+	// Use the real KeyStore loaded from database fixtures
+	store1.KeyStore.Unlock(cltest.Password)
+
+	config, cleanup := cltest.NewConfig(t)
+	gethClient := new(mocks.GethClient)
+	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
+	eb1 := bulletprooftxmanager.NewEthBroadcaster(store1, gethWrapper, config)
+
+	// Simulate another node
+	store2, cleanup := cltest.NewStore(t)
+	defer cleanup()
+	eb2 := bulletprooftxmanager.NewEthBroadcaster(store2, gethWrapper, config)
+
+	keys, err := store1.Keys()
+	require.NoError(t, err)
+	key := keys[0]
+	defaultFromAddress := key.Address.Address()
+	toAddress := gethCommon.HexToAddress("0x6C03DDA95a2AEd917EeCc6eddD4b9D16E6380411")
+	value := assets.NewEthValue(142)
+	gasLimit := uint64(242)
+
+	chSendingTx := make(chan bool)
+	chFinish := make(chan struct{})
+
+	etx := models.EthTransaction{
+		FromAddress:    defaultFromAddress,
+		ToAddress:      toAddress,
+		EncodedPayload: []byte{42, 42, 0},
+		Value:          value,
+		GasLimit:       gasLimit,
+		CreatedAt:      time.Unix(0, 0),
+	}
+	gethClient.On("SendTransaction", mock.Anything, mock.MatchedBy(func(tx *gethTypes.Transaction) bool {
+		chSendingTx <- true
+		<-chFinish
+		return true
+	})).Return(nil).Once()
+
+	require.NoError(t, store1.GetRawDB().Save(&etx).Error)
+
+	// First one gets the lock
+	go func() {
+		err := eb1.ProcessUnbroadcastEthTransactions(*key)
+		fmt.Println(err)
+		require.NoError(t, err)
+	}()
+
+	// Wait until first one is in the middle of its run
+	<-chSendingTx
+
+	// Second node's attempt to get lock fails
+	require.EqualError(t, eb2.ProcessUnbroadcastEthTransactions(*key), fmt.Sprintf("could not get advisory lock for key %v", key.ID))
+
+	// Resume original run
+	close(chFinish)
 }
 
 func TestBulletproofTxManager_GetDefaultAddress(t *testing.T) {
