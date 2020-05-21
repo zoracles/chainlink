@@ -12,7 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `HistoricAggregatorInterface.sol`. Users are encouraged to use the new methods
 introduced on the `AggregatorInterface`(`getRoundData` and `latestRoundData`),
 as they return metadata to indicate freshness of the data in a single
-cross-contract call.
+cross-contract call. 
+- Solidity: Marked `HistoricAggregatorInterface` methods (`latestAnswer`, 
+`latestRound`, `latestTimestamp`, `getAnswer`, `getTimestamp`) as deprecated 
+on `FluxAggregator`, `WhitelistedAggregator`, `AggregatorProxy`, 
+`WhitelistedAggregatorProxy`.
 
 ## [0.8.4] - 2020-05-18
 
