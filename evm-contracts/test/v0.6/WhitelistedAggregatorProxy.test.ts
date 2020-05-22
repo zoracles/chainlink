@@ -29,6 +29,7 @@ beforeAll(async () => {
 describe('WhitelistedAggregatorProxy', () => {
   const deposit = h.toWei('100')
   const answer = h.numToBytes32(54321)
+  const answer2 = h.numToBytes32(54320)
   const roundId = 17
   const decimals = 18
   const timestamp = 678
@@ -37,6 +38,7 @@ describe('WhitelistedAggregatorProxy', () => {
   let link: contract.Instance<contract.LinkTokenFactory>
   let whitelist: contract.Instance<MockWhitelistFactory>
   let aggregator: contract.Instance<MockAggregatorFactory>
+  let aggregator2: contract.Instance<MockAggregatorFactory>
   let proxy: contract.CallableOverrideInstance<WhitelistedAggregatorProxyFactory>
 
   const deployment = setup.snapshot(provider, async () => {
@@ -47,10 +49,21 @@ describe('WhitelistedAggregatorProxy', () => {
     whitelist = await whitelistFactory.connect(defaultAccount).deploy()
     await aggregator.updateRoundData(roundId, answer, timestamp, startedAt)
     await link.transfer(aggregator.address, deposit)
-    proxy = contract.callableAggregator(
+    proxy = contract.callable(
       await whitelistedAggregatorProxyFactory
         .connect(defaultAccount)
         .deploy(aggregator.address, whitelist.address),
+      [
+        'latestAnswer',
+        'getAnswer',
+        'latestTimestamp',
+        'getTimestamp',
+        'latestRound',
+        'latestRoundData',
+        'getRoundData',
+        'proposedGetRoundData',
+        'proposedLatestRoundData',
+      ],
     )
   })
 
@@ -61,6 +74,7 @@ describe('WhitelistedAggregatorProxy', () => {
   it('has a limited public interface', () => {
     matchers.publicAbi(whitelistedAggregatorProxyFactory, [
       'aggregator',
+      'confirmAggregator',
       'decimals',
       'getAnswer',
       'getRoundData',
@@ -69,9 +83,12 @@ describe('WhitelistedAggregatorProxy', () => {
       'latestRound',
       'latestRoundData',
       'latestTimestamp',
+      'proposeAggregator',
+      'proposedAggregator',
+      'proposedGetRoundData',
+      'proposedLatestRoundData',
       'whitelist',
       'whitelistMaintainer',
-      'setAggregator',
       'setWhitelist',
       // Ownable methods:
       'acceptOwnership',
@@ -118,6 +135,18 @@ describe('WhitelistedAggregatorProxy', () => {
         await proxy.connect(personas.Carol).getRoundData(1)
       }, 'Not whitelisted')
     })
+
+    it('proposedGetRoundData reverts', async () => {
+      await matchers.evmRevert(async () => {
+        await proxy.connect(personas.Carol).proposedGetRoundData(1)
+      }, 'Not whitelisted')
+    })
+
+    it('proposedLatestRoundData reverts', async () => {
+      await matchers.evmRevert(async () => {
+        await proxy.connect(personas.Carol).proposedLatestRoundData()
+      }, 'Not whitelisted')
+    })
   })
 
   describe('if the caller is whitelisted', () => {
@@ -159,6 +188,29 @@ describe('WhitelistedAggregatorProxy', () => {
       matchers.bigNum(answer, round.answer)
       matchers.bigNum(startedAt, round.startedAt)
       matchers.bigNum(timestamp, round.updatedAt)
+    })
+
+    describe('and an aggregator has been proposed', () => {
+      beforeEach(async () => {
+        aggregator2 = await aggregatorFactory
+          .connect(defaultAccount)
+          .deploy(decimals, answer2)
+        await proxy.proposeAggregator(aggregator2.address)
+      })
+
+      it('proposedGetRoundData works', async () => {
+        const latestRound = await aggregator2.latestRound()
+        const round = await proxy.proposedGetRoundData(latestRound)
+        matchers.bigNum(latestRound, round.roundId)
+        matchers.bigNum(answer2, round.answer)
+      })
+
+      it('proposedLatestRoundData works', async () => {
+        const latestRound = await aggregator2.latestRound()
+        const round = await proxy.proposedLatestRoundData()
+        matchers.bigNum(latestRound, round.roundId)
+        matchers.bigNum(answer2, round.answer)
+      })
     })
   })
 

@@ -176,6 +176,36 @@ contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
     return _latestRoundData();
   }
 
+  function proposedGetRoundData(uint256 _roundId)
+    external
+    isWhitelisted()
+    override
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return _proposedGetRoundData(_roundId);
+  }
+
+  function proposedLatestRoundData()
+    external
+    isWhitelisted()
+    override
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return _proposedLatestRoundData();
+  }
+
   /**
    * @dev reverts if the caller is not whitelisted by the whitelist contract
    */
