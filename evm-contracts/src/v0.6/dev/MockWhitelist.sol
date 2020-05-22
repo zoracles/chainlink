@@ -2,7 +2,7 @@ pragma solidity ^0.6.0;
 
 import "./WhitelistedInterface.sol";
 
-contract MockPayment is WhitelistedInterface {
+contract MockWhitelist is WhitelistedInterface {
 
   bool public whitelistEnabled;
   mapping(address => bool) public override whitelisted;

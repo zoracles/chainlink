@@ -6,7 +6,7 @@ import {
 } from '@chainlink/test-helpers'
 import { assert } from 'chai'
 import { ethers } from 'ethers'
-import { MockPaymentFactory } from '../../ethers/v0.6/MockPaymentFactory'
+import { MockWhitelistFactory } from '../../ethers/v0.6/MockWhitelistFactory'
 import { MockAggregatorFactory } from '../../ethers/v0.6/MockAggregatorFactory'
 import { WhitelistedAggregatorProxyFactory } from '../../ethers/v0.6/WhitelistedAggregatorProxyFactory'
 
@@ -15,7 +15,7 @@ let defaultAccount: ethers.Wallet
 
 const provider = setup.provider()
 const linkTokenFactory = new contract.LinkTokenFactory()
-const paymentFactory = new MockPaymentFactory()
+const whitelistFactory = new MockWhitelistFactory()
 const aggregatorFactory = new MockAggregatorFactory()
 const whitelistedAggregatorProxyFactory = new WhitelistedAggregatorProxyFactory()
 
@@ -35,7 +35,7 @@ describe('WhitelistedAggregatorProxy', () => {
   const startedAt = 677
 
   let link: contract.Instance<contract.LinkTokenFactory>
-  let paymentContract: contract.Instance<MockPaymentFactory>
+  let whitelist: contract.Instance<MockWhitelistFactory>
   let aggregator: contract.Instance<MockAggregatorFactory>
   let proxy: contract.CallableOverrideInstance<WhitelistedAggregatorProxyFactory>
 
@@ -44,13 +44,13 @@ describe('WhitelistedAggregatorProxy', () => {
     aggregator = await aggregatorFactory
       .connect(defaultAccount)
       .deploy(decimals, 0)
-    paymentContract = await paymentFactory.connect(defaultAccount).deploy()
+    whitelist = await whitelistFactory.connect(defaultAccount).deploy()
     await aggregator.updateRoundData(roundId, answer, timestamp, startedAt)
     await link.transfer(aggregator.address, deposit)
     proxy = contract.callableAggregator(
       await whitelistedAggregatorProxyFactory
         .connect(defaultAccount)
-        .deploy(aggregator.address, paymentContract.address),
+        .deploy(aggregator.address, whitelist.address),
     )
   })
 
@@ -69,10 +69,10 @@ describe('WhitelistedAggregatorProxy', () => {
       'latestRound',
       'latestRoundData',
       'latestTimestamp',
-      'paymentContract',
-      'paymentContractMaintainer',
+      'whitelist',
+      'whitelistMaintainer',
       'setAggregator',
-      'setPaymentContract',
+      'setWhitelist',
       // Ownable methods:
       'acceptOwnership',
       'owner',
@@ -122,7 +122,7 @@ describe('WhitelistedAggregatorProxy', () => {
 
   describe('if the caller is whitelisted', () => {
     beforeEach(async () => {
-      await paymentContract.addToWhitelist(defaultAccount.address)
+      await whitelist.addToWhitelist(defaultAccount.address)
 
       matchers.bigNum(
         ethers.utils.bigNumberify(answer),
@@ -159,6 +159,28 @@ describe('WhitelistedAggregatorProxy', () => {
       matchers.bigNum(answer, round.answer)
       matchers.bigNum(startedAt, round.startedAt)
       matchers.bigNum(timestamp, round.updatedAt)
+    })
+  })
+
+  describe('#setWhitelist', () => {
+    let newWhitelist: contract.Instance<MockWhitelistFactory>
+
+    beforeEach(async () => {
+      newWhitelist = await whitelistFactory.connect(defaultAccount).deploy()
+    })
+    describe('when called by a stranger', () => {
+      it('reverts', async () => {
+        await matchers.evmRevert(async () => {
+          await proxy.connect(personas.Carol).setWhitelist(newWhitelist.address)
+        }, 'Not maintainer')
+      })
+    })
+
+    describe('when called by the maintainer', () => {
+      it('updates the whitelist contract', async () => {
+        await proxy.connect(defaultAccount).setWhitelist(newWhitelist.address)
+        assert.equal(await proxy.whitelist(), newWhitelist.address)
+      })
     })
   })
 })

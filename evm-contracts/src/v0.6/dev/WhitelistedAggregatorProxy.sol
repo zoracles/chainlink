@@ -13,29 +13,29 @@ import "./Whitelisted.sol";
  */
 contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
 
-  WhitelistedInterface public paymentContract;
-  address public paymentContractMaintainer;
+  WhitelistedInterface public whitelist;
+  address public whitelistMaintainer;
 
   constructor(
     address _aggregator,
-    address _paymentContract
+    address _whitelist
   )
     public
     AggregatorProxy(_aggregator)
   {
-    paymentContractMaintainer = msg.sender;
-    setPaymentContract(_paymentContract);
+    whitelistMaintainer = msg.sender;
+    setWhitelist(_whitelist);
   }
 
   /**
-   * @notice Allows the owner to update the payment contract address.
-   * @param _paymentContract The new address for the payment contract
+   * @notice Allows the owner to update the whitelist contract address.
+   * @param _whitelist The new address for the whitelist contract
    */
-  function setPaymentContract(address _paymentContract)
+  function setWhitelist(address _whitelist)
     public
     onlyMaintainer()
   {
-    paymentContract = WhitelistedInterface(_paymentContract);
+    whitelist = WhitelistedInterface(_whitelist);
   }
 
   /**
@@ -177,17 +177,18 @@ contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
   }
 
   /**
-   * @dev reverts if the caller is not whitelisted first by
-   * the payment contract, then by the local whitelisted mapping,
-   * and lastly if the whitelist is enabled
+   * @dev reverts if the caller is not whitelisted by the whitelist contract
    */
   modifier isWhitelisted() override {
-    require(paymentContract.whitelisted(msg.sender), "Not whitelisted");
+    require(whitelist.whitelisted(msg.sender), "Not whitelisted");
     _;
   }
 
+  /**
+   * @dev reverts if the caller is not the maintainer
+   */
   modifier onlyMaintainer() {
-    require(msg.sender == paymentContractMaintainer, "Not maintainer");
+    require(msg.sender == whitelistMaintainer, "Not maintainer");
     _;
   }
 }
