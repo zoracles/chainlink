@@ -36,14 +36,15 @@ type EthTransaction struct {
 }
 
 type EthTransactionAttempt struct {
-	ID               int64
-	EthTransactionID int64
-	EthTransaction   EthTransaction
-	GasPrice         utils.Big
-	SignedRawTx      []byte
-	Hash             common.Hash
-	CreatedAt        time.Time
-	EthReceipts      []EthReceipt
+	ID                      int64
+	EthTransactionID        int64
+	EthTransaction          EthTransaction
+	GasPrice                utils.Big
+	SignedRawTx             []byte
+	Hash                    common.Hash
+	CreatedAt               time.Time
+	BroadcastBeforeBlockNum *int64
+	EthReceipts             []EthReceipt
 }
 
 type EthReceipt struct {

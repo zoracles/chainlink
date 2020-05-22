@@ -25,11 +25,11 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-func TestTxBroadcaster_NewBulletproofTxManager(t *testing.T) {
+func TestTxBroadcaster_NewEthBroadcaster(t *testing.T) {
 	// TODO: write this test
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testing.T) {
+func TestEthBroadcaster_ProcessUnbroadcastEthTransactions_Success(t *testing.T) {
 	store, cleanup := cltest.NewStore(t)
 	defer cleanup()
 	// Use the real KeyStore loaded from database fixtures
@@ -184,9 +184,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 		assert.Equal(t, earlierTransaction.ID, attempt.EthTransactionID)
 		assert.Equal(t, config.EthGasPriceDefault().String(), attempt.GasPrice.String())
 		assert.Equal(t, "0xb025c9270b7d6df1d92730913e956146cb2db018a3611fd53c2d90abf7ef8a04", attempt.Hash.Hex())
-		require.Len(t, attempt.EthReceipts, 0)
-
 		assert.Equal(t, "0xf867808504a817c80081f2946c03dda95a2aed917eecc6eddd4b9d16e6380411818e832a2a0029a0dd5cf86fe8e6c6c863c5cc4feb2cbfa5a87b289d8f74b8d82a599931629970faa01e65293571cd92fb96398dfd22362e76cacb527ff9472c5aa14439ae3381e9d2", hexutil.Encode(attempt.SignedRawTx))
+		require.Len(t, attempt.EthReceipts, 0)
 
 		// Check laterEthTransaction and it's attempt
 		// This was the later one sent so it has the higher nonce
@@ -205,15 +204,14 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 		assert.Equal(t, laterTransaction.ID, attempt.EthTransactionID)
 		assert.Equal(t, config.EthGasPriceDefault().String(), attempt.GasPrice.String())
 		assert.Equal(t, "0x92ff25de8269533a0fac227bcb25af742bdb04a9e0a8d71bf00222610f7fa206", attempt.Hash.Hex())
-		require.Len(t, attempt.EthReceipts, 0)
-
 		assert.Equal(t, "0xf867018504a817c80081f2946c03dda95a2aed917eecc6eddd4b9d16e6380411818e832a2a012aa05706ca2b15c5796218fc602be65cca821d28310135407889fa40bf409c891a6aa01d72b825e1c765c8a3368cbef7ce3c249ceceadc36aa17c60294c4c959545e6e", hexutil.Encode(attempt.SignedRawTx))
+		require.Len(t, attempt.EthReceipts, 0)
 
 		gethClient.AssertExpectations(t)
 	})
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCrash(t *testing.T) {
+func TestEthBroadcaster_ProcessUnbroadcastEthTransactions_ResumingFromCrash(t *testing.T) {
 	toAddress := gethCommon.HexToAddress("0x6C03DDA95a2AEd917EeCc6eddD4b9D16E6380411")
 	value := assets.NewEthValue(142)
 	gasLimit := uint64(242)
@@ -535,7 +533,7 @@ func getLocalNextNonce(t *testing.T, str *store.Store, fromAddress gethCommon.Ad
 // Note that all of these tests share the same database, and ordering matters.
 // This in order to more deeply test ProcessUnbroadcastEthTransactions over
 // multiple runs with previous errors in the database.
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testing.T) {
+func TestEthBroadcaster_ProcessUnbroadcastEthTransactions_Errors(t *testing.T) {
 	toAddress := gethCommon.HexToAddress("0x6C03DDA95a2AEd917EeCc6eddD4b9D16E6380411")
 	value := assets.NewEthValue(142)
 	gasLimit := uint64(242)
@@ -796,7 +794,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 	})
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_KeystoreErrors(t *testing.T) {
+func TestEthBroadcaster_ProcessUnbroadcastEthTransactions_KeystoreErrors(t *testing.T) {
 	toAddress := gethCommon.HexToAddress("0x6C03DDA95a2AEd917EeCc6eddD4b9D16E6380411")
 	value := assets.NewEthValue(142)
 	gasLimit := uint64(242)
@@ -900,7 +898,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_KeystoreErrors(t
 	gethClient.AssertExpectations(t)
 }
 
-func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testing.T) {
+func TestEthBroadcaster_ProcessUnbroadcastEthTransactions_Locking(t *testing.T) {
 	store1, cleanup := cltest.NewStore(t)
 	defer cleanup()
 	// Use the real KeyStore loaded from database fixtures
@@ -964,12 +962,12 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 	<-chFinish
 }
 
-func TestBulletproofTxManager_GetDefaultAddress(t *testing.T) {
+func TestEthBroadcaster_GetDefaultAddress(t *testing.T) {
 	// Test cases:
 	// -
 }
 
-func TestBulletproofTxManager_GetNextNonce(t *testing.T) {
+func TestEthBroadcaster_GetNextNonce(t *testing.T) {
 	store, cleanup := cltest.NewStore(t)
 	defer cleanup()
 
@@ -983,7 +981,7 @@ func TestBulletproofTxManager_GetNextNonce(t *testing.T) {
 	assert.Equal(t, int64(0), nonce)
 }
 
-func TestBulletproofTxManager_IncrementNextNonce(t *testing.T) {
+func TestEthBroadcaster_IncrementNextNonce(t *testing.T) {
 	store, cleanup := cltest.NewStore(t)
 	defer cleanup()
 

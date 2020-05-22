@@ -70,6 +70,10 @@ func Migrate(tx *gorm.DB) error {
 			octet_length(hash) = 32
 		);
 
+		ALTER TABLE eth_transaction_attempts ADD CONSTRAINT chk_cannot_broadcast_before_block_zero CHECK (
+			broadcast_before_block_num IS NULL OR broadcast_before_block_num > 0
+		);
+
 		CREATE UNIQUE INDEX idx_eth_transaction_attempts_hash ON eth_transaction_attempts (hash);
 		CREATE INDEX idx_eth_transaction_attempts ON eth_transaction_attempts (eth_transaction_id);
 		CREATE INDEX idx_eth_transactions_broadcast_before_block_num ON eth_transaction_attempts (broadcast_before_block_num);

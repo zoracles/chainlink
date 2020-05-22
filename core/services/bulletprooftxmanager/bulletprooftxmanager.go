@@ -104,7 +104,6 @@ func sendTransaction(gethClientWrapper strpkg.GethClientWrapper, signedTransacti
 // bumpGas returns a new gas price increased by the larger of:
 // - A configured percentage bump (ETH_GAS_BUMP_PERCENT)
 // - A configured fixed amount of Wei (ETH_GAS_PRICE_WEI)
-// TODO: unit test
 func BumpGas(config orm.ConfigReader, originalGasPrice *big.Int) *big.Int {
 	// Similar logic is used in geth
 	// See: https://github.com/ethereum/go-ethereum/blob/8d7aa9078f8a94c2c10b1d11e04242df0ea91e5b/core/tx_list.go#L255

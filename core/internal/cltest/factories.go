@@ -730,3 +730,6 @@ func MustInsertKey(t *testing.T, store *store.Store, address common.Address) mod
 	require.NoError(t, store.GetRawDB().Save(&key).Error)
 	return key
 }
+
+// func MustInsertBroadcastEthTransactionAttempt(t *testing.T, store *store.Store, etx models.EthTransaction) models.Attempt {
+// }
