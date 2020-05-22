@@ -1,24 +1,18 @@
 package bulletprooftxmanager
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/eth"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/store/orm"
-	"github.com/smartcontractkit/chainlink/core/utils"
 
-	gethAccounts "github.com/ethereum/go-ethereum/accounts"
 	gethCommon "github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 )
@@ -27,10 +21,6 @@ const (
 	// databasePollInterval indicates how long to wait each time before polling
 	// the database for new eth_transactions to send
 	databasePollInterval = 1 * time.Second
-
-	// maxEthNodeRequestTime is the worst case time we will wait for a response
-	// from the eth node before we consider it to be an error
-	maxEthNodeRequestTime = 2 * time.Minute
 
 	// EthBroadcaster advisory lock class ID
 	ethBroadcasterAdvisoryLockClassID = 0
@@ -53,12 +43,11 @@ type EthBroadcaster interface {
 // into the chain falls on the shoulders of the ethConfirmer.
 //
 // What ethBroadcaster does guarantee is:
-// - a monotic series of increasing nonces for eth_transactions that can be confirmed if you retry enough times
+// - a monotic series of increasing nonces for eth_transactions that can all eventually be confirmed if you retry enough times
 // - existence of a saved eth_transaction_attempt
 type ethBroadcaster struct {
-	store             *store.Store
-	gethClientWrapper store.GethClientWrapper
-	config            orm.ConfigReader
+	store  *store.Store
+	config orm.ConfigReader
 
 	started    bool
 	stateMutex sync.RWMutex
@@ -67,13 +56,12 @@ type ethBroadcaster struct {
 	chDone chan struct{}
 }
 
-func NewEthBroadcaster(store *store.Store, gethClientWrapper store.GethClientWrapper, config orm.ConfigReader) EthBroadcaster {
+func NewEthBroadcaster(store *store.Store, config orm.ConfigReader) EthBroadcaster {
 	return &ethBroadcaster{
-		store:             store,
-		gethClientWrapper: gethClientWrapper,
-		config:            config,
-		chStop:            make(chan struct{}),
-		chDone:            make(chan struct{}),
+		store:  store,
+		config: config,
+		chStop: make(chan struct{}),
+		chDone: make(chan struct{}),
 	}
 }
 
@@ -131,7 +119,7 @@ func (eb *ethBroadcaster) monitorEthTransactions() {
 						// NOTE: retries if this function errors are unbounded,
 						// since they can be due to things like network errors
 						// etc
-						logger.Error(err)
+						logger.Errorf("Error in ProcessUnbroadcastEthTransactions: %s", err)
 					}
 					wg.Done()
 				}(*key)
@@ -154,6 +142,7 @@ func (eb *ethBroadcaster) ProcessUnbroadcastEthTransactions(key models.Key) erro
 	ctx := context.Background()
 	conn, err := eb.store.GetRawDB().DB().Conn(ctx)
 	if err != nil {
+		logger.Error(err)
 		return err
 	}
 	defer conn.Close()
@@ -165,7 +154,8 @@ func (eb *ethBroadcaster) ProcessUnbroadcastEthTransactions(key models.Key) erro
 }
 
 // TODO: write this doc
-// NOTE: This MUST NOT be run concurrently for the same key or it will break things!
+// NOTE: This MUST NOT be run concurrently for the same address or it could
+// result in undefined state or deadlocks.
 func (eb *ethBroadcaster) processUnbroadcastEthTransactions(fromAddress gethCommon.Address) error {
 	logger.Debugf("ProcessUnbroadcastEthTransactions start for %s", fromAddress.Hex())
 
@@ -187,7 +177,7 @@ func (eb *ethBroadcaster) processUnbroadcastEthTransactions(fromAddress gethComm
 
 		gasPrice := eb.config.EthGasPriceDefault()
 		etxAttempt := &models.EthTransactionAttempt{}
-		sendError := eb.send(etx, etxAttempt, gasPrice)
+		sendError := send(eb.store, etx, etxAttempt, gasPrice)
 
 		if sendError.Fatal() {
 			etx.Error = sendError.StrPtr()
@@ -264,7 +254,7 @@ func (eb *ethBroadcaster) handleUnfinishedEthTransaction(ethTransaction *models.
 	gasPrice := eb.config.EthGasPriceDefault()
 	ethTransactionAttempt := &models.EthTransactionAttempt{}
 
-	sendError := eb.send(ethTransaction, ethTransactionAttempt, gasPrice)
+	sendError := send(eb.store, ethTransaction, ethTransactionAttempt, gasPrice)
 	if sendError.Fatal() {
 		errString := sendError.Error()
 		ethTransaction.Error = &errString
@@ -321,15 +311,20 @@ func saveBroadcastTransaction(store *store.Store, ethTransaction *models.EthTran
 	if ethTransaction.Nonce == nil {
 		return errors.New("nonce must be set")
 	}
-	// TODO: Convert these to use TransactionWithAdvisoryLock
 	return store.Transaction(func(tx *gorm.DB) error {
 		if err := IncrementNextNonce(tx, ethTransaction.FromAddress, *ethTransaction.Nonce); err != nil {
+			logger.Error(err)
 			return err
 		}
 		if err := tx.Save(ethTransaction).Error; err != nil {
+			logger.Error(err)
 			return err
 		}
-		return tx.Save(attempt).Error
+		err := tx.Save(attempt).Error
+		if err != nil {
+			logger.Error(err)
+		}
+		return err
 	})
 }
 
@@ -378,81 +373,6 @@ func IncrementNextNonce(db *gorm.DB, address gethCommon.Address, currentNonce in
 	return nil
 }
 
-// TODO: Write this doc
-// NOTE: it can modify the EthTransaction and the EthTransactionAttempt in
-// memory but will not save them
-// Returning error here indicates that it may succeed on retry
-func (eb *ethBroadcaster) send(etx *models.EthTransaction, attempt *models.EthTransactionAttempt, initialGasPrice *big.Int) *sendError {
-	if etx == nil || attempt == nil {
-		return NewFatalSendError("etx and etxAttempt must be non-nil")
-	}
-	if etx.Nonce == nil {
-		return NewFatalSendError("cannot send transaction without nonce")
-	}
-	account, err := eb.store.KeyStore.GetAccountByAddress(etx.FromAddress)
-	if err != nil {
-		return FatalSendError(errors.Wrapf(err, "Error getting account %s for transaction %v", etx.FromAddress.String(), etx.ID))
-	}
-
-	transaction := gethTypes.NewTransaction(uint64(*etx.Nonce), etx.ToAddress, etx.Value.ToInt(), etx.GasLimit, initialGasPrice, etx.EncodedPayload)
-	signedTx, signedTxBytes, err := eb.signTx(account, transaction, eb.config.ChainID())
-	if err != nil {
-		return FatalSendError(errors.Wrapf(err, "Error using account %s to sign transaction %v", etx.FromAddress.String(), etx.ID))
-	}
-
-	attempt.SignedRawTx = signedTxBytes
-	attempt.EthTransactionID = etx.ID
-	attempt.GasPrice = *utils.NewBig(initialGasPrice)
-
-	sendErr := sendTransaction(eb.gethClientWrapper, signedTx)
-	broadcastAt := time.Now()
-
-	if sendErr.Fatal() {
-		return sendErr
-	}
-
-	etx.BroadcastAt = &broadcastAt
-
-	if sendErr == nil {
-		return nil
-	}
-
-	// Bump gas if necessary
-	if sendErr.isTerminallyUnderpriced() {
-		logger.Errorf("transaction %v was underpriced at %v wei. You should increase your configured ETH_GAS_PRICE_DEFAULT (currently set to %v wei)", etx.ID, initialGasPrice, eb.config.EthGasPriceDefault())
-		newGasPrice := eb.bumpGas(initialGasPrice)
-		logger.Infof("retrying transaction %v with new gas price of %v wei", etx.ID, newGasPrice.Int64())
-		return eb.send(etx, attempt, newGasPrice)
-	} else if sendErr.isTransactionAlreadyInMempool() {
-		logger.Debugf("transaction %v already in mempool", etx.ID)
-		return nil
-	}
-	return sendErr
-}
-
-func (eb *ethBroadcaster) signTx(account gethAccounts.Account, tx *gethTypes.Transaction, chainID *big.Int) (*gethTypes.Transaction, []byte, error) {
-	signedTx, err := eb.store.KeyStore.SignTx(account, tx, chainID)
-	if err != nil {
-		return nil, nil, err
-	}
-	rlp := new(bytes.Buffer)
-	if err := signedTx.EncodeRLP(rlp); err != nil {
-		return nil, nil, err
-	}
-	return signedTx, rlp.Bytes(), nil
-
-}
-
-func sendTransaction(gethClientWrapper store.GethClientWrapper, signedTransaction *gethTypes.Transaction) *sendError {
-	err := gethClientWrapper.GethClient(func(gethClient eth.GethClient) error {
-		ctx, cancel := context.WithTimeout(context.Background(), maxEthNodeRequestTime)
-		defer cancel()
-		return gethClient.SendTransaction(ctx, signedTransaction)
-	})
-
-	return SendError(err)
-}
-
 // GetDefaultAddress queries the database for the address of the primary default ethereum key
 func GetDefaultAddress(store *store.Store) (gethCommon.Address, error) {
 	defaultKey, err := getDefaultKey(store)
@@ -488,34 +408,12 @@ func cloneForRebroadcast(etx *models.EthTransaction) models.EthTransaction {
 	}
 }
 
-// TODO: This is copied from tx_manager which is suboptimal. Consider copying unit tests also.
-// bumpGas returns a new gas price increased by the larger of:
-// - A configured percentage bump (ETH_GAS_BUMP_PERCENT)
-// - A configured fixed amount of Wei (ETH_GAS_PRICE_WEI)
-func (eb *ethBroadcaster) bumpGas(originalGasPrice *big.Int) *big.Int {
-	// Similar logic is used in geth
-	// See: https://github.com/ethereum/go-ethereum/blob/8d7aa9078f8a94c2c10b1d11e04242df0ea91e5b/core/tx_list.go#L255
-	// And: https://github.com/ethereum/go-ethereum/blob/8d7aa9078f8a94c2c10b1d11e04242df0ea91e5b/core/tx_pool.go#L171
-	percentageMultiplier := big.NewInt(100 + int64(eb.config.EthGasBumpPercent()))
-	minimumGasBumpByPercentage := new(big.Int).Div(
-		new(big.Int).Mul(
-			originalGasPrice,
-			percentageMultiplier,
-		),
-		big.NewInt(100),
-	)
-	minimumGasBumpByIncrement := new(big.Int).Add(originalGasPrice, eb.config.EthGasBumpWei())
-	if minimumGasBumpByIncrement.Cmp(minimumGasBumpByPercentage) < 0 {
-		return minimumGasBumpByPercentage
-	}
-	return minimumGasBumpByIncrement
-}
-
 func (eb *ethBroadcaster) lock(ctx context.Context, conn *sql.Conn, keyID int32) error {
 	gotLock := false
 	rows, err := conn.QueryContext(ctx, "SELECT pg_try_advisory_lock($1, $2)", ethBroadcasterAdvisoryLockClassID, keyID)
 	defer rows.Close()
 	if err != nil {
+		logger.Error(err)
 		return err
 	}
 	gotRow := rows.Next()
@@ -523,6 +421,7 @@ func (eb *ethBroadcaster) lock(ctx context.Context, conn *sql.Conn, keyID int32)
 		return errors.New("query unexpectedly returned 0 rows")
 	}
 	if err := rows.Scan(&gotLock); err != nil {
+		logger.Error(err)
 		return err
 	}
 	if gotLock {
@@ -533,5 +432,8 @@ func (eb *ethBroadcaster) lock(ctx context.Context, conn *sql.Conn, keyID int32)
 
 func (eb *ethBroadcaster) unlock(ctx context.Context, conn *sql.Conn, keyID int32) error {
 	_, err := conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1, $2)", ethBroadcasterAdvisoryLockClassID, keyID)
+	if err != nil {
+		logger.Error(err)
+	}
 	return err
 }

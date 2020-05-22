@@ -37,8 +37,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 
 	config, cleanup := cltest.NewConfig(t)
 	gethClient := new(mocks.GethClient)
-	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-	eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+	store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+	eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 	keys, err := store.Keys()
 	require.NoError(t, err)
@@ -121,6 +121,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 			require.Equal(t, toAddress, *tx.To())
 			require.Equal(t, value.ToInt().String(), tx.Value().String())
 			require.Equal(t, earlierEthTransaction.EncodedPayload, tx.Data())
+			require.Equal(t, "0x6acac565c14ca984f1fad43e63036ccc777bfa95a3447930696bb3a33dd99653", tx.Hash().Hex())
 
 			// They must be set to something to indicate that the transaction is signed
 			v, r, s := tx.RawSignatureValues()
@@ -149,6 +150,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 			require.Equal(t, toAddress, *tx.To())
 			require.Equal(t, value.ToInt().String(), tx.Value().String())
 			require.Equal(t, laterEthTransaction.EncodedPayload, tx.Data())
+			require.Equal(t, "0xbea12954ffafe9ac9d89abf6f2f9a563cc50fa14a31e5866e0c0063e76556b60", tx.Hash().Hex())
 
 			// They must be set to something to indicate that the transaction is signed
 			v, r, s := tx.RawSignatureValues()
@@ -181,11 +183,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 
 		assert.Equal(t, earlierTransaction.ID, attempt.EthTransactionID)
 		assert.Equal(t, config.EthGasPriceDefault().String(), attempt.GasPrice.String())
-		assert.Nil(t, attempt.Hash)
-		assert.Nil(t, attempt.Error)
-		assert.Nil(t, attempt.ConfirmedInBlockNum)
-		assert.Nil(t, attempt.ConfirmedInBlockHash)
-		assert.Nil(t, attempt.ConfirmedAt)
+		assert.Equal(t, "0xb025c9270b7d6df1d92730913e956146cb2db018a3611fd53c2d90abf7ef8a04", attempt.Hash.Hex())
+		require.Len(t, attempt.EthReceipts, 0)
 
 		assert.Equal(t, "0xf867808504a817c80081f2946c03dda95a2aed917eecc6eddd4b9d16e6380411818e832a2a0029a0dd5cf86fe8e6c6c863c5cc4feb2cbfa5a87b289d8f74b8d82a599931629970faa01e65293571cd92fb96398dfd22362e76cacb527ff9472c5aa14439ae3381e9d2", hexutil.Encode(attempt.SignedRawTx))
 
@@ -205,11 +204,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Success(t *testi
 
 		assert.Equal(t, laterTransaction.ID, attempt.EthTransactionID)
 		assert.Equal(t, config.EthGasPriceDefault().String(), attempt.GasPrice.String())
-		assert.Nil(t, attempt.Hash)
-		assert.Nil(t, attempt.Error)
-		assert.Nil(t, attempt.ConfirmedInBlockNum)
-		assert.Nil(t, attempt.ConfirmedInBlockHash)
-		assert.Nil(t, attempt.ConfirmedAt)
+		assert.Equal(t, "0x92ff25de8269533a0fac227bcb25af742bdb04a9e0a8d71bf00222610f7fa206", attempt.Hash.Hex())
+		require.Len(t, attempt.EthReceipts, 0)
 
 		assert.Equal(t, "0xf867018504a817c80081f2946c03dda95a2aed917eecc6eddd4b9d16e6380411818e832a2a012aa05706ca2b15c5796218fc602be65cca821d28310135407889fa40bf409c891a6aa01d72b825e1c765c8a3368cbef7ce3c249ceceadc36aa17c60294c4c959545e6e", hexutil.Encode(attempt.SignedRawTx))
 
@@ -271,8 +267,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCras
 
 		config, cleanup := cltest.NewConfig(t)
 		gethClient := new(mocks.GethClient)
-		gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-		eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+		eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 		keys, err := store.Keys()
 		require.NoError(t, err)
@@ -323,8 +319,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCras
 
 		config, cleanup := cltest.NewConfig(t)
 		gethClient := new(mocks.GethClient)
-		gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-		eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+		eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 		keys, err := store.Keys()
 		require.NoError(t, err)
@@ -376,8 +372,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCras
 
 		config, cleanup := cltest.NewConfig(t)
 		gethClient := new(mocks.GethClient)
-		gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-		eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+		eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 		keys, err := store.Keys()
 		require.NoError(t, err)
@@ -428,8 +424,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCras
 
 		config, cleanup := cltest.NewConfig(t)
 		gethClient := new(mocks.GethClient)
-		gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-		eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+		eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 		keys, err := store.Keys()
 		require.NoError(t, err)
@@ -482,8 +478,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_ResumingFromCras
 
 		config, cleanup := cltest.NewConfig(t)
 		gethClient := new(mocks.GethClient)
-		gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-		eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+		eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 		keys, err := store.Keys()
 		require.NoError(t, err)
@@ -556,8 +552,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 
 	config, cleanup := cltest.NewConfig(t)
 	gethClient := new(mocks.GethClient)
-	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-	eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+	store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+	eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 	t.Run("external wallet sent a transction from the account and now the nonce is one higher than it should be", func(t *testing.T) {
 		// TODO: Describe this behaviour
@@ -717,7 +713,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Errors(t *testin
 		gethClient.AssertExpectations(t)
 	})
 
-	t.Run("eth node returns 'underpriced transaction'", func(t *testing.T) {
+	t.Run("eth node returns underpriced transaction", func(t *testing.T) {
 		// This happens if a transaction's gas price is below the minimum
 		// configured for the transaction pool.
 		// This is a configuration error by the node operator, since it means they set the base gas level too low.
@@ -820,8 +816,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_KeystoreErrors(t
 
 	config, cleanup := cltest.NewConfig(t)
 	gethClient := new(mocks.GethClient)
-	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-	eb := bulletprooftxmanager.NewEthBroadcaster(store, gethWrapper, config)
+	store.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+	eb := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 	t.Run("keystore does not have the unlocked key", func(t *testing.T) {
 		etx := models.EthTransaction{
@@ -912,13 +908,13 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 
 	config, cleanup := cltest.NewConfig(t)
 	gethClient := new(mocks.GethClient)
-	gethWrapper := cltest.NewSimpleGethWrapper(gethClient)
-	eb1 := bulletprooftxmanager.NewEthBroadcaster(store1, gethWrapper, config)
+	store1.GethClientWrapper = cltest.NewSimpleGethWrapper(gethClient)
+	eb1 := bulletprooftxmanager.NewEthBroadcaster(store1, config)
 
 	// Simulate another node
 	store2, cleanup := cltest.NewStore(t)
 	defer cleanup()
-	eb2 := bulletprooftxmanager.NewEthBroadcaster(store2, gethWrapper, config)
+	eb2 := bulletprooftxmanager.NewEthBroadcaster(store2, config)
 
 	keys, err := store1.Keys()
 	require.NoError(t, err)
@@ -929,6 +925,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 	gasLimit := uint64(242)
 
 	chSendingTx := make(chan bool)
+	chMidway := make(chan struct{})
 	chFinish := make(chan struct{})
 
 	etx := models.EthTransaction{
@@ -941,7 +938,7 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 	}
 	gethClient.On("SendTransaction", mock.Anything, mock.MatchedBy(func(tx *gethTypes.Transaction) bool {
 		chSendingTx <- true
-		<-chFinish
+		<-chMidway
 		return true
 	})).Return(nil).Once()
 
@@ -950,8 +947,8 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 	// First one gets the lock
 	go func() {
 		err := eb1.ProcessUnbroadcastEthTransactions(*key)
-		fmt.Println(err)
 		require.NoError(t, err)
+		close(chFinish)
 	}()
 
 	// Wait until first one is in the middle of its run
@@ -961,7 +958,10 @@ func TestBulletproofTxManager_ProcessUnbroadcastEthTransactions_Locking(t *testi
 	require.EqualError(t, eb2.ProcessUnbroadcastEthTransactions(*key), fmt.Sprintf("could not get advisory lock for key %v", key.ID))
 
 	// Resume original run
-	close(chFinish)
+	close(chMidway)
+
+	// Ensure all go routines exited
+	<-chFinish
 }
 
 func TestBulletproofTxManager_GetDefaultAddress(t *testing.T) {

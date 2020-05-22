@@ -36,16 +36,26 @@ type EthTransaction struct {
 }
 
 type EthTransactionAttempt struct {
-	ID                   int64
-	EthTransactionID     int64
-	GasPrice             utils.Big
-	SignedRawTx          []byte
-	Hash                 *common.Hash
-	Error                *string
-	ConfirmedInBlockNum  *int64
-	ConfirmedInBlockHash *common.Hash
-	ConfirmedAt          *time.Time
-	CreatedAt            time.Time
+	ID               int64
+	EthTransactionID int64
+	EthTransaction   EthTransaction
+	GasPrice         utils.Big
+	SignedRawTx      []byte
+	Hash             common.Hash
+	CreatedAt        time.Time
+	EthReceipts      []EthReceipt
+}
+
+type EthReceipt struct {
+	ID                      int64
+	EthTransactionAttemptID int64
+	EthTransactionAttempt   EthTransactionAttempt
+	TxHash                  common.Hash
+	BlockHash               common.Hash
+	BlockNumber             int64
+	TransactionIndex        uint
+	Receipt                 types.Receipt
+	CreatedAt               time.Time
 }
 
 // Tx contains fields necessary for an Ethereum transaction with

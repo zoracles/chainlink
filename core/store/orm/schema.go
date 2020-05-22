@@ -31,7 +31,7 @@ type ConfigSchema struct {
 	MinimumServiceDuration          models.Duration `env:"MINIMUM_SERVICE_DURATION" default:"0s" `
 	EthGasBumpThreshold             uint64          `env:"ETH_GAS_BUMP_THRESHOLD" default:"12" `
 	EthGasBumpWei                   big.Int         `env:"ETH_GAS_BUMP_WEI" default:"5000000000"`
-	EthGasBumpPercent               uint16          `env:"ETH_GAS_BUMP_PERCENT" default:"10"`
+	EthGasBumpPercent               uint16          `env:"ETH_GAS_BUMP_PERCENT" default:"20"`
 	EthGasLimitDefault              uint64          `env:"ETH_GAS_LIMIT_DEFAULT" default:"500000"`
 	EthGasPriceDefault              big.Int         `env:"ETH_GAS_PRICE_DEFAULT" default:"20000000000"`
 	EthMaxGasPriceWei               uint64          `env:"ETH_MAX_GAS_PRICE_WEI" default:"500000000000"`

@@ -89,7 +89,7 @@ func NewApplication(config *orm.Config, onConnectCallbacks ...func(Application))
 	jobSubscriber := services.NewJobSubscriber(store, runManager)
 	gasUpdater := services.NewGasUpdater(store)
 	fluxMonitor := fluxmonitor.New(store, runManager)
-	ethTransactionBroadcaster := bulletprooftxmanager.NewEthBroadcaster(store, store.GethClientWrapper, config)
+	ethTransactionBroadcaster := bulletprooftxmanager.NewEthBroadcaster(store, config)
 
 	pendingConnectionResumer := newPendingConnectionResumer(runManager)
 

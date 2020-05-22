@@ -9,6 +9,8 @@ import (
 // constraints but this will undergo revision as the work progresses
 func Migrate(tx *gorm.DB) error {
 	return tx.Exec(`
+		CREATE TYPE eth_transactions_attempt_state AS ENUM ('unconfirmed', 'confirmed');
+
 	  	CREATE TABLE eth_transactions (
 			id BIGSERIAL PRIMARY KEY,
 			nonce bigint, 
@@ -19,10 +21,20 @@ func Migrate(tx *gorm.DB) error {
 			gas_limit bigint NOT NULL,
 			error text,
 			broadcast_at timestamptz,
-			created_at timestamptz NOT NULL
-	  	);
+			created_at timestamptz NOT NULL,
+			-- NOTE: attempt_state is strictly speaking redundant but much needed from a performance standpoint
+			attempt_state eth_transactions_attempt_state NOT NULL DEFAULT 'unconfirmed'::eth_transactions_attempt_state
+		  );
+		  
+		ALTER TABLE eth_transactions ADD CONSTRAINT chk_from_address_length CHECK (
+			octet_length(from_address) = 20
+		);
+		ALTER TABLE eth_transactions ADD CONSTRAINT chk_to_address_length CHECK (
+			octet_length(to_address) = 20
+		);
 
 		CREATE UNIQUE INDEX idx_eth_transactions_nonce_from_address ON eth_transactions (nonce, from_address);
+		CREATE INDEX idx_eth_transactions_attempt_state ON eth_transactions (attempt_state) WHERE attempt_state = 'unconfirmed';
 		CREATE INDEX idx_eth_transactions_created_at ON eth_transactions USING BRIN (created_at);
 
 		-- only one record allowed per account with a nonce but no broadcast_at
@@ -49,26 +61,19 @@ func Migrate(tx *gorm.DB) error {
 		 	eth_transaction_id bigint REFERENCES eth_transactions (id) NOT NULL,
 		 	gas_price numeric(78,0) NOT NULL,
 		 	signed_raw_tx bytea NOT NULL,
-		 	hash bytea,
-		 	error text,
-		 	confirmed_in_block_num bigint,
-		 	confirmed_in_block_hash bytea,
-		 	confirmed_at timestamptz,
+		 	hash bytea NOT NULL,
+			broadcast_before_block_num bigint,
 		 	created_at timestamptz NOT NULL
 		);
 
-		ALTER TABLE eth_transaction_attempts ADD CONSTRAINT chk_hash_must_have_associated_fields CHECK (
-			(hash IS NULL AND confirmed_in_block_num IS NULL AND confirmed_in_block_hash IS NULL AND confirmed_at IS NULL)
-			OR
-			(hash IS NOT NULL AND confirmed_in_block_num IS NOT NULL AND confirmed_in_block_hash IS NOT NULL AND confirmed_at IS NOT NULL)
+		ALTER TABLE eth_transaction_attempts ADD CONSTRAINT chk_hash_length CHECK (
+			octet_length(hash) = 32
 		);
 
-		CREATE UNIQUE INDEX idx_eth_transaction_attempts_signed_raw_tx ON eth_transaction_attempts (signed_raw_tx);
 		CREATE UNIQUE INDEX idx_eth_transaction_attempts_hash ON eth_transaction_attempts (hash);
 		CREATE INDEX idx_eth_transaction_attempts ON eth_transaction_attempts (eth_transaction_id);
-		CREATE INDEX idx_eth_transactions_confirmed_in_block_num ON eth_transaction_attempts (confirmed_in_block_num) WHERE confirmed_in_block_num IS NOT NULL;
-		CREATE INDEX idx_eth_transactions_confirmed_in_block_hash ON eth_transaction_attempts (confirmed_in_block_hash) WHERE confirmed_in_block_hash IS NOT NULL;
-		CREATE INDEX idx_eth_transactions_attempts_created_at ON eth_transaction_attempts USING BRIN (created_at);
+		CREATE INDEX idx_eth_transactions_broadcast_before_block_num ON eth_transaction_attempts (broadcast_before_block_num);
+		CREATE INDEX idx_eth_transaction_attempts_created_at ON eth_transaction_attempts USING BRIN (created_at);
 
 		CREATE TABLE eth_task_run_transactions (
 			task_run_id uuid NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
@@ -77,5 +82,20 @@ func Migrate(tx *gorm.DB) error {
 
 		CREATE UNIQUE INDEX idx_eth_task_run_transactions_task_run_id ON eth_task_run_transactions (task_run_id);
 		CREATE UNIQUE INDEX idx_eth_task_run_transactions_eth_transaction_id ON eth_task_run_transactions (eth_transaction_id);
+
+		CREATE TABLE eth_receipts (
+			id BIGSERIAL PRIMARY KEY,
+			eth_transaction_attempt_id bigint REFERENCES eth_transaction_attempts (id) NOT NULL,
+			transaction_hash bytea NOT NULL,
+			block_hash bytea NOT NULL,
+			block_number bigint NOT NULL,
+			transaction_index bigint NOT NULL,
+			receipt jsonb NOT NULL,
+			created_at timestamptz NOT NULL
+		);
+
+		CREATE INDEX idx_eth_transactions_attempt_receipts_block_number ON eth_receipts (block_number);
+		CREATE UNIQUE INDEX idx_unique_receipts ON eth_receipts (block_hash, transaction_hash);
+		CREATE INDEX idx_eth_receipts_created_at ON eth_transaction_attempts USING BRIN (created_at);
 	`).Error
 }

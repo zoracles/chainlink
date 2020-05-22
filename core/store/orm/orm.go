@@ -624,10 +624,10 @@ func (orm *ORM) FindEthTaskRunTransactionByTaskRunID(taskRunID models.ID) (model
 	return etrt, err
 }
 
-// FindEthTransactionWithAttempts finds the EthTransaction with its attempts preloaded
+// FindEthTransactionWithAttempts finds the EthTransaction with its attempts and receipts preloaded
 func (orm *ORM) FindEthTransactionWithAttempts(ethTransactionID int64) (models.EthTransaction, error) {
 	etx := models.EthTransaction{}
-	err := orm.db.Preload("EthTransactionAttempts").First(&etx, "id = ?", &ethTransactionID).Error
+	err := orm.db.Preload("EthTransactionAttempts.EthReceipts").First(&etx, "id = ?", &ethTransactionID).Error
 	return etx, err
 }
 
@@ -1129,6 +1129,7 @@ func (orm *ORM) BulkDeleteRuns(bulkQuery *models.BulkDeleteRunRequest) error {
 }
 
 // Keys returns all of the keys recorded in the database.
+// TODO: Can we get rid of the pointer?
 func (orm *ORM) Keys() ([]*models.Key, error) {
 	orm.MustEnsureAdvisoryLock()
 	var keys []*models.Key

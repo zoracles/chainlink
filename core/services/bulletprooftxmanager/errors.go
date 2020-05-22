@@ -73,7 +73,7 @@ func SendError(e error) *sendError {
 
 // Geth/parity returns these errors if the transaction failed in such a way that:
 // 1. It can NEVER be included into a block
-// 2. Resending the transaction will never change that outcome
+// 2. Resending the transaction even with higher gas price will never change that outcome
 // TODO: This probably should have unit tests
 func isFatalSendError(err error) bool {
 	if err == nil {

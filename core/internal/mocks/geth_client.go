@@ -51,3 +51,26 @@ func (_m *GethClient) SendTransaction(_a0 context.Context, _a1 *types.Transactio
 
 	return r0
 }
+
+// TransactionReceipt provides a mock function with given fields: ctx, txHash
+func (_m *GethClient) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	ret := _m.Called(ctx, txHash)
+
+	var r0 *types.Receipt
+	if rf, ok := ret.Get(0).(func(context.Context, common.Hash) *types.Receipt); ok {
+		r0 = rf(ctx, txHash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.Receipt)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, common.Hash) error); ok {
+		r1 = rf(ctx, txHash)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
