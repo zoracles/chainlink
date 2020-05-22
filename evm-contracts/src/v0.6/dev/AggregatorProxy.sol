@@ -12,6 +12,7 @@ import "../Owned.sol";
 contract AggregatorProxy is AggregatorInterface, Owned {
 
   AggregatorInterface public aggregator;
+  AggregatorInterface public proposedAggregator;
 
   constructor(address _aggregator) public Owned() {
     setAggregator(_aggregator);
@@ -150,6 +151,34 @@ contract AggregatorProxy is AggregatorInterface, Owned {
     return _latestRoundData();
   }
 
+  function proposedGetRoundData(uint256 _roundId)
+    external
+    virtual
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return _proposedGetRoundData(_roundId);
+  }
+
+  function proposedLatestRoundData()
+    external
+    virtual
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return _proposedLatestRoundData();
+  }
+
   /**
    * @notice represents the number of decimals the aggregator responses represent.
    */
@@ -162,19 +191,67 @@ contract AggregatorProxy is AggregatorInterface, Owned {
   }
 
   /**
-   * @notice Allows the owner to update the aggregator address.
+   * @notice Allows the owner to propose a new address for the aggregator
    * @param _aggregator The new address for the aggregator contract
    */
-  function setAggregator(address _aggregator)
-    public
+  function proposeAggregator(address _aggregator)
+    external
     onlyOwner()
   {
-    aggregator = AggregatorInterface(_aggregator);
+    proposedAggregator = AggregatorInterface(_aggregator);
+  }
+
+  /**
+   * @notice Allows the owner to confirm and change the address
+   * to the proposed aggregator
+   * @dev Reverts if the given address doesn't match what was previously
+   * proposed
+   * @param _aggregator The new address for the aggregator contract
+   */
+  function confirmAggregator(address _aggregator)
+    external
+    onlyOwner()
+  {
+    require(_aggregator == address(proposedAggregator), "Invalid proposed aggregator");
+    delete proposedAggregator;
+    setAggregator(_aggregator);
   }
 
   /*
    * Internal
    */
+
+  function setAggregator(address _aggregator)
+    internal
+  {
+    aggregator = AggregatorInterface(_aggregator);
+  }
+
+  function _proposedGetRoundData(uint256 _roundId)
+    internal
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return proposedAggregator.getRoundData(_roundId);
+  }
+
+  function _proposedLatestRoundData()
+    internal
+    returns (
+      uint256 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint256 answeredInRound
+    )
+  {
+    return proposedAggregator.latestRoundData();
+  }
 
   function _latestAnswer()
     internal

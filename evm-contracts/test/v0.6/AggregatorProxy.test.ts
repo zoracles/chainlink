@@ -2,27 +2,24 @@ import {
   contract,
   helpers as h,
   matchers,
-  oracle,
   setup,
 } from '@chainlink/test-helpers'
 import { assert } from 'chai'
 import { ethers } from 'ethers'
-import { AggregatorFactory } from '../../ethers/v0.4/AggregatorFactory'
+import { MockHistoricAggregatorFactory } from '../../ethers/v0.6/MockHistoricAggregatorFactory'
+import { MockAggregatorFactory } from '../../ethers/v0.6/MockAggregatorFactory'
 import { AggregatorProxyFactory } from '../../ethers/v0.6/AggregatorProxyFactory'
 import { AggregatorFacadeFactory } from '../../ethers/v0.6/AggregatorFacadeFactory'
-import { OracleFactory } from '../../ethers/v0.6/OracleFactory'
-import { FluxAggregatorFactory } from '../../ethers/v0.6/FluxAggregatorFactory'
 
 let personas: setup.Personas
 let defaultAccount: ethers.Wallet
 
 const provider = setup.provider()
 const linkTokenFactory = new contract.LinkTokenFactory()
-const aggregatorFactory = new AggregatorFactory()
+const aggregatorFactory = new MockAggregatorFactory()
+const historicAggregatorFactory = new MockHistoricAggregatorFactory()
 const aggregatorFacadeFactory = new AggregatorFacadeFactory()
-const oracleFactory = new OracleFactory()
 const aggregatorProxyFactory = new AggregatorProxyFactory()
-const fluxAggregatorFactory = new FluxAggregatorFactory()
 
 beforeAll(async () => {
   const users = await setup.users(provider)
@@ -32,31 +29,37 @@ beforeAll(async () => {
 })
 
 describe('AggregatorProxy', () => {
-  const jobId1 =
-    '0x4c7b7ffb66b344fbaa64995af81e355a00000000000000000000000000000001'
   const deposit = h.toWei('100')
-  const basePayment = h.toWei('1')
   const response = h.numToBytes32(54321)
   const response2 = h.numToBytes32(67890)
+  const decimals = 18
 
   let link: contract.Instance<contract.LinkTokenFactory>
-  let aggregator: contract.CallableOverrideInstance<AggregatorFactory>
-  let aggregator2: contract.CallableOverrideInstance<AggregatorFactory>
-  let oc1: contract.Instance<OracleFactory>
+  let aggregator: contract.Instance<MockAggregatorFactory>
+  let aggregator2: contract.Instance<MockAggregatorFactory>
+  let historicAggregator: contract.Instance<MockHistoricAggregatorFactory>
   let proxy: contract.CallableOverrideInstance<AggregatorProxyFactory>
   const deployment = setup.snapshot(provider, async () => {
     link = await linkTokenFactory.connect(defaultAccount).deploy()
-    oc1 = await oracleFactory.connect(defaultAccount).deploy(link.address)
-    aggregator = contract.callableAggregator(
-      await aggregatorFactory
-        .connect(defaultAccount)
-        .deploy(link.address, basePayment, 1, [oc1.address], [jobId1]),
-    )
+    aggregator = await aggregatorFactory
+      .connect(defaultAccount)
+      .deploy(decimals, response)
     await link.transfer(aggregator.address, deposit)
-    proxy = contract.callableAggregator(
+    proxy = contract.callable(
       await aggregatorProxyFactory
         .connect(defaultAccount)
         .deploy(aggregator.address),
+      [
+        'latestAnswer',
+        'getAnswer',
+        'latestTimestamp',
+        'getTimestamp',
+        'latestRound',
+        'latestRoundData',
+        'getRoundData',
+        'proposedGetRoundData',
+        'proposedLatestRoundData',
+      ],
     )
   })
 
@@ -67,6 +70,7 @@ describe('AggregatorProxy', () => {
   it('has a limited public interface', () => {
     matchers.publicAbi(aggregatorProxyFactory, [
       'aggregator',
+      'confirmAggregator',
       'decimals',
       'getAnswer',
       'getRoundData',
@@ -75,7 +79,10 @@ describe('AggregatorProxy', () => {
       'latestRound',
       'latestRoundData',
       'latestTimestamp',
-      'setAggregator',
+      'proposeAggregator',
+      'proposedAggregator',
+      'proposedGetRoundData',
+      'proposedLatestRoundData',
       // Ownable methods:
       'acceptOwnership',
       'owner',
@@ -84,20 +91,6 @@ describe('AggregatorProxy', () => {
   })
 
   describe('#latestAnswer', () => {
-    beforeEach(async () => {
-      const requestTx = await aggregator.requestRateUpdate()
-      const receipt = await requestTx.wait()
-
-      const request = oracle.decodeRunRequest(receipt.logs?.[3])
-      await oc1.fulfillOracleRequest(
-        ...oracle.convertFufillParams(request, response),
-      )
-      matchers.bigNum(
-        ethers.utils.bigNumberify(response),
-        await aggregator.latestAnswer(),
-      )
-    })
-
     it('pulls the rate from the aggregator', async () => {
       matchers.bigNum(response, await proxy.latestAnswer())
       const latestRound = await proxy.latestRound()
@@ -106,22 +99,14 @@ describe('AggregatorProxy', () => {
 
     describe('after being updated to another contract', () => {
       beforeEach(async () => {
-        aggregator2 = contract.callableAggregator(
-          await aggregatorFactory
-            .connect(defaultAccount)
-            .deploy(link.address, basePayment, 1, [oc1.address], [jobId1]),
-        )
+        aggregator2 = await aggregatorFactory
+          .connect(defaultAccount)
+          .deploy(decimals, response2)
         await link.transfer(aggregator2.address, deposit)
-        const requestTx = await aggregator2.requestRateUpdate()
-        const receipt = await requestTx.wait()
-        const request = oracle.decodeRunRequest(receipt.logs?.[3])
-
-        await oc1.fulfillOracleRequest(
-          ...oracle.convertFufillParams(request, response2),
-        )
         matchers.bigNum(response2, await aggregator2.latestAnswer())
 
-        await proxy.setAggregator(aggregator2.address)
+        await proxy.proposeAggregator(aggregator2.address)
+        await proxy.confirmAggregator(aggregator2.address)
       })
 
       it('pulls the rate from the new aggregator', async () => {
@@ -134,13 +119,6 @@ describe('AggregatorProxy', () => {
 
   describe('#latestTimestamp', () => {
     beforeEach(async () => {
-      const requestTx = await aggregator.requestRateUpdate()
-      const receipt = await requestTx.wait()
-      const request = oracle.decodeRunRequest(receipt.logs?.[3])
-
-      await oc1.fulfillOracleRequest(
-        ...oracle.convertFufillParams(request, response),
-      )
       const height = await aggregator.latestTimestamp()
       assert.notEqual('0', height.toString())
     })
@@ -159,23 +137,10 @@ describe('AggregatorProxy', () => {
 
     describe('after being updated to another contract', () => {
       beforeEach(async () => {
-        aggregator2 = contract.callableAggregator(
-          await aggregatorFactory
-            .connect(defaultAccount)
-            .deploy(link.address, basePayment, 1, [oc1.address], [jobId1]),
-        )
-        await link.transfer(aggregator2.address, deposit)
+        aggregator2 = await aggregatorFactory
+          .connect(defaultAccount)
+          .deploy(decimals, response2)
 
-        const requestTx = await aggregator2.requestRateUpdate()
-        const receipt = await requestTx.wait()
-        const request = oracle.decodeRunRequest(receipt.logs?.[3])
-
-        await h.increaseTimeBy(30, provider)
-        await h.mineBlock(provider)
-
-        await oc1.fulfillOracleRequest(
-          ...oracle.convertFufillParams(request, response2),
-        )
         const height2 = await aggregator2.latestTimestamp()
         assert.notEqual('0', height2.toString())
 
@@ -186,7 +151,8 @@ describe('AggregatorProxy', () => {
           'Height1 and Height2 should not be equal',
         )
 
-        await proxy.setAggregator(aggregator2.address)
+        await proxy.proposeAggregator(aggregator2.address)
+        await proxy.confirmAggregator(aggregator2.address)
       })
 
       it('pulls the timestamp from the new aggregator', async () => {
@@ -206,16 +172,14 @@ describe('AggregatorProxy', () => {
   describe('#getRoundData', () => {
     describe('when pointed at a Historic Aggregator', () => {
       beforeEach(async () => {
-        const requestTx = await aggregator.requestRateUpdate()
-        const receipt = await requestTx.wait()
-
-        const request = oracle.decodeRunRequest(receipt.logs?.[3])
-        await oc1.fulfillOracleRequest(
-          ...oracle.convertFufillParams(request, response),
-        )
+        historicAggregator = await historicAggregatorFactory
+          .connect(defaultAccount)
+          .deploy(response2)
+        await proxy.proposeAggregator(historicAggregator.address)
+        await proxy.confirmAggregator(historicAggregator.address)
         matchers.bigNum(
-          ethers.utils.bigNumberify(response),
-          await aggregator.latestAnswer(),
+          ethers.utils.bigNumberify(response2),
+          await proxy.latestAnswer(),
         )
       })
 
@@ -231,7 +195,8 @@ describe('AggregatorProxy', () => {
           const facade = await aggregatorFacadeFactory
             .connect(defaultAccount)
             .deploy(aggregator.address, 18)
-          await proxy.setAggregator(facade.address)
+          await proxy.proposeAggregator(facade.address)
+          await proxy.confirmAggregator(facade.address)
         })
 
         it('works for a valid roundId', async () => {
@@ -248,35 +213,20 @@ describe('AggregatorProxy', () => {
     })
 
     describe('when pointed at a FluxAggregator', () => {
-      const roundId = 1
-      const submission = 42
       beforeEach(async () => {
-        const fluxAggregator = await fluxAggregatorFactory
+        aggregator2 = await aggregatorFactory
           .connect(defaultAccount)
-          .deploy(
-            link.address,
-            basePayment,
-            3600,
-            18,
-            ethers.utils.formatBytes32String('DOGE/ZWL'),
-          )
-        await link.transferAndCall(fluxAggregator.address, deposit, [])
-        await fluxAggregator.addOracles(
-          [defaultAccount.address],
-          [defaultAccount.address],
-          1,
-          1,
-          0,
-        )
-        await fluxAggregator.submit(roundId, submission)
+          .deploy(decimals, response2)
 
-        await proxy.setAggregator(fluxAggregator.address)
+        await proxy.proposeAggregator(aggregator2.address)
+        await proxy.confirmAggregator(aggregator2.address)
       })
 
       it('works for a valid round ID', async () => {
+        const roundId = await aggregator2.latestRound()
         const round = await proxy.getRoundData(roundId)
         matchers.bigNum(roundId, round.roundId)
-        matchers.bigNum(submission, round.answer)
+        matchers.bigNum(response2, round.answer)
         const nowSeconds = new Date().valueOf() / 1000
         assert.isAbove(round.startedAt.toNumber(), nowSeconds - 120)
         assert.isBelow(round.startedAt.toNumber(), nowSeconds)
@@ -289,16 +239,14 @@ describe('AggregatorProxy', () => {
   describe('#latestRoundData', () => {
     describe('when pointed at a Historic Aggregator', () => {
       beforeEach(async () => {
-        const requestTx = await aggregator.requestRateUpdate()
-        const receipt = await requestTx.wait()
-
-        const request = oracle.decodeRunRequest(receipt.logs?.[3])
-        await oc1.fulfillOracleRequest(
-          ...oracle.convertFufillParams(request, response),
-        )
+        historicAggregator = await historicAggregatorFactory
+          .connect(defaultAccount)
+          .deploy(response2)
+        await proxy.proposeAggregator(historicAggregator.address)
+        await proxy.confirmAggregator(historicAggregator.address)
         matchers.bigNum(
-          ethers.utils.bigNumberify(response),
-          await aggregator.latestAnswer(),
+          ethers.utils.bigNumberify(response2),
+          await proxy.latestAnswer(),
         )
       })
 
@@ -313,7 +261,8 @@ describe('AggregatorProxy', () => {
           const facade = await aggregatorFacadeFactory
             .connect(defaultAccount)
             .deploy(aggregator.address, 18)
-          await proxy.setAggregator(facade.address)
+          await proxy.proposeAggregator(facade.address)
+          await proxy.confirmAggregator(facade.address)
         })
 
         it('does not revert', async () => {
@@ -330,35 +279,20 @@ describe('AggregatorProxy', () => {
     })
 
     describe('when pointed at a FluxAggregator', () => {
-      const roundId = 1
-      const submission = 42
       beforeEach(async () => {
-        const fluxAggregator = await fluxAggregatorFactory
+        aggregator2 = await aggregatorFactory
           .connect(defaultAccount)
-          .deploy(
-            link.address,
-            basePayment,
-            3600,
-            18,
-            ethers.utils.formatBytes32String('DOGE/ZWL'),
-          )
-        await link.transferAndCall(fluxAggregator.address, deposit, [])
-        await fluxAggregator.addOracles(
-          [defaultAccount.address],
-          [defaultAccount.address],
-          1,
-          1,
-          0,
-        )
-        await fluxAggregator.submit(roundId, submission)
+          .deploy(decimals, response2)
 
-        await proxy.setAggregator(fluxAggregator.address)
+        await proxy.proposeAggregator(aggregator2.address)
+        await proxy.confirmAggregator(aggregator2.address)
       })
 
       it('does not revert', async () => {
+        const roundId = await aggregator2.latestRound()
         const round = await proxy.latestRoundData()
         matchers.bigNum(roundId, round.roundId)
-        matchers.bigNum(submission, round.answer)
+        matchers.bigNum(response2, round.answer)
         const nowSeconds = new Date().valueOf() / 1000
         assert.isAbove(round.startedAt.toNumber(), nowSeconds - 120)
         assert.isBelow(round.startedAt.toNumber(), nowSeconds)
@@ -368,35 +302,160 @@ describe('AggregatorProxy', () => {
     })
   })
 
-  describe('#setAggregator', () => {
+  describe('#proposeAggregator', () => {
     beforeEach(async () => {
       await proxy.transferOwnership(personas.Carol.address)
       await proxy.connect(personas.Carol).acceptOwnership()
 
-      aggregator2 = contract.callableAggregator(
-        await aggregatorFactory
-          .connect(defaultAccount)
-          .deploy(link.address, basePayment, 1, [oc1.address], [jobId1]),
-      )
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, 1)
 
       assert.equal(aggregator.address, await proxy.aggregator())
     })
 
     describe('when called by the owner', () => {
-      it('sets the address of the new aggregator', async () => {
-        await proxy.connect(personas.Carol).setAggregator(aggregator2.address)
+      it('sets the address of the proposed aggregator', async () => {
+        await proxy
+          .connect(personas.Carol)
+          .proposeAggregator(aggregator2.address)
 
-        assert.equal(aggregator2.address, await proxy.aggregator())
+        assert.equal(aggregator2.address, await proxy.proposedAggregator())
       })
     })
 
     describe('when called by a non-owner', () => {
       it('does not update', async () => {
         await matchers.evmRevert(async () => {
-          await proxy.connect(personas.Neil).setAggregator(aggregator2.address)
+          await proxy
+            .connect(personas.Neil)
+            .proposeAggregator(aggregator2.address)
         })
 
         assert.equal(aggregator.address, await proxy.aggregator())
+      })
+    })
+  })
+
+  describe('#confirmAggregator', () => {
+    beforeEach(async () => {
+      await proxy.transferOwnership(personas.Carol.address)
+      await proxy.connect(personas.Carol).acceptOwnership()
+
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, 1)
+
+      assert.equal(aggregator.address, await proxy.aggregator())
+    })
+
+    describe('when called by the owner', () => {
+      it('sets the address of the new aggregator', async () => {
+        await proxy
+          .connect(personas.Carol)
+          .proposeAggregator(aggregator2.address)
+        await proxy
+          .connect(personas.Carol)
+          .confirmAggregator(aggregator2.address)
+
+        assert.equal(aggregator2.address, await proxy.aggregator())
+      })
+    })
+
+    describe('when called by a non-owner', () => {
+      beforeEach(async () => {
+        await proxy
+          .connect(personas.Carol)
+          .proposeAggregator(aggregator2.address)
+      })
+
+      it('does not update', async () => {
+        await matchers.evmRevert(async () => {
+          await proxy
+            .connect(personas.Neil)
+            .confirmAggregator(aggregator2.address)
+        })
+
+        assert.equal(aggregator.address, await proxy.aggregator())
+      })
+    })
+  })
+
+  describe('#proposedGetRoundData', () => {
+    beforeEach(async () => {
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, response2)
+    })
+
+    describe('when an aggregator has been proposed', () => {
+      beforeEach(async () => {
+        await proxy
+          .connect(defaultAccount)
+          .proposeAggregator(aggregator2.address)
+        assert.equal(await proxy.proposedAggregator(), aggregator2.address)
+      })
+
+      it('returns the data for the proposed aggregator', async () => {
+        const roundId = await aggregator2.latestRound()
+        const round = await proxy.proposedGetRoundData(roundId)
+        matchers.bigNum(roundId, round.roundId)
+        matchers.bigNum(response2, round.answer)
+      })
+
+      describe('after the aggregator has been confirmed', () => {
+        beforeEach(async () => {
+          await proxy
+            .connect(defaultAccount)
+            .confirmAggregator(aggregator2.address)
+          assert.equal(await proxy.aggregator(), aggregator2.address)
+        })
+
+        it('reverts', async () => {
+          const roundId = await aggregator2.latestRound()
+          await matchers.evmRevert(async () => {
+            await proxy.proposedGetRoundData(roundId)
+          })
+        })
+      })
+    })
+  })
+
+  describe('#proposedLatestRoundData', () => {
+    beforeEach(async () => {
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, response2)
+    })
+
+    describe('when an aggregator has been proposed', () => {
+      beforeEach(async () => {
+        await proxy
+          .connect(defaultAccount)
+          .proposeAggregator(aggregator2.address)
+        assert.equal(await proxy.proposedAggregator(), aggregator2.address)
+      })
+
+      it('returns the data for the proposed aggregator', async () => {
+        const roundId = await aggregator2.latestRound()
+        const round = await proxy.proposedLatestRoundData()
+        matchers.bigNum(roundId, round.roundId)
+        matchers.bigNum(response2, round.answer)
+      })
+
+      describe('after the aggregator has been confirmed', () => {
+        beforeEach(async () => {
+          await proxy
+            .connect(defaultAccount)
+            .confirmAggregator(aggregator2.address)
+          assert.equal(await proxy.aggregator(), aggregator2.address)
+        })
+
+        it('reverts', async () => {
+          await matchers.evmRevert(async () => {
+            await proxy.proposedLatestRoundData()
+          })
+        })
       })
     })
   })
