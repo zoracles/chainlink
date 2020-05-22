@@ -1,8 +1,8 @@
 pragma solidity ^0.6.0;
 
-import "../dev/Whitelisted.sol";
+import "../dev/AccessControlWhitelisted.sol";
 
-contract WhitelistedTestHelper is Whitelisted {
+contract WhitelistedTestHelper is AccessControlWhitelisted {
 
   int256 private value;
 

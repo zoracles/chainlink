@@ -1,7 +1,7 @@
 pragma solidity 0.6.2;
 
 import "./ConversionProxy.sol";
-import "./Whitelisted.sol";
+import "./AccessControlWhitelisted.sol";
 
 /**
  * @title A trusted proxy for updating where current answers are read from
@@ -11,7 +11,7 @@ import "./Whitelisted.sol";
  * @notice Only whitelisted addresses are allowed to access getters for
  * aggregated answers and round information.
  */
-contract WhitelistedConversionProxy is ConversionProxy, Whitelisted {
+contract WhitelistedConversionProxy is ConversionProxy, AccessControlWhitelisted {
 
   /**
    * @notice Deploys the WhitelistedConversionProxy contract

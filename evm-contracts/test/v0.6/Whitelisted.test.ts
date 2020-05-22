@@ -1,6 +1,6 @@
 import { contract, helpers, matchers, setup } from '@chainlink/test-helpers'
 import { assert } from 'chai'
-import { WhitelistedFactory } from '../../ethers/v0.6/WhitelistedFactory'
+import { AccessControlWhitelistedFactory } from '../../ethers/v0.6/AccessControlWhitelistedFactory'
 import { WhitelistedTestHelperFactory } from '../../ethers/v0.6/WhitelistedTestHelperFactory'
 
 const whitelistedFactory = new WhitelistedTestHelperFactory()
@@ -10,8 +10,8 @@ beforeAll(async () => {
   await setup.users(provider).then(u => (personas = u.personas))
 })
 
-describe('Whitelisted', () => {
-  let whitelisted: contract.Instance<WhitelistedFactory>
+describe('AccessControlWhitelisted', () => {
+  let whitelisted: contract.Instance<AccessControlWhitelistedFactory>
   const value = 17
   const deployment = setup.snapshot(provider, async () => {
     whitelisted = await whitelistedFactory.connect(personas.Carol).deploy(value)
@@ -19,7 +19,7 @@ describe('Whitelisted', () => {
   beforeEach(deployment)
 
   it('has a limited public interface', () => {
-    matchers.publicAbi(new WhitelistedFactory(), [
+    matchers.publicAbi(new AccessControlWhitelistedFactory(), [
       'addToWhitelist',
       'disableWhitelist',
       'enableWhitelist',

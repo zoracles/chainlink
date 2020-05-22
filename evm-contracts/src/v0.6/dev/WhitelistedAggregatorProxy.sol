@@ -13,7 +13,29 @@ import "./Whitelisted.sol";
  */
 contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
 
-  constructor(address _aggregator) public AggregatorProxy(_aggregator) {
+  WhitelistedInterface public paymentContract;
+  address public paymentContractMaintainer;
+
+  constructor(
+    address _aggregator,
+    address _paymentContract
+  )
+    public
+    AggregatorProxy(_aggregator)
+  {
+    paymentContractMaintainer = msg.sender;
+    setPaymentContract(_paymentContract);
+  }
+
+  /**
+   * @notice Allows the owner to update the payment contract address.
+   * @param _paymentContract The new address for the payment contract
+   */
+  function setPaymentContract(address _paymentContract)
+    public
+    onlyMaintainer()
+  {
+    paymentContract = WhitelistedInterface(_paymentContract);
   }
 
   /**
@@ -154,4 +176,18 @@ contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
     return _latestRoundData();
   }
 
+  /**
+   * @dev reverts if the caller is not whitelisted first by
+   * the payment contract, then by the local whitelisted mapping,
+   * and lastly if the whitelist is enabled
+   */
+  modifier isWhitelisted() override {
+    require(paymentContract.whitelisted(msg.sender), "Not whitelisted");
+    _;
+  }
+
+  modifier onlyMaintainer() {
+    require(msg.sender == paymentContractMaintainer, "Not maintainer");
+    _;
+  }
 }
