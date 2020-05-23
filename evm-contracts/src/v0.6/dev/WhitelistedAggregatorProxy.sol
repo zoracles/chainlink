@@ -2,6 +2,7 @@ pragma solidity 0.6.2;
 
 import "./AggregatorProxy.sol";
 import "./Whitelisted.sol";
+import "./Maintainable.sol";
 
 /**
  * @title A trusted proxy for updating where current answers are read from
@@ -11,10 +12,9 @@ import "./Whitelisted.sol";
  * @notice Only whitelisted addresses are allowed to access getters for
  * aggregated answers and round information.
  */
-contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
+contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted, Maintainable {
 
   WhitelistedInterface public whitelist;
-  address public whitelistMaintainer;
 
   constructor(
     address _aggregator,
@@ -23,8 +23,15 @@ contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
     public
     AggregatorProxy(_aggregator)
   {
-    whitelistMaintainer = msg.sender;
     setWhitelist(_whitelist);
+  }
+
+  function transferMaintainer(address _to)
+    public
+    onlyOwner()
+    override
+  {
+    _transferMaintainer(_to);
   }
 
   /**
@@ -211,14 +218,6 @@ contract WhitelistedAggregatorProxy is AggregatorProxy, Whitelisted {
    */
   modifier isWhitelisted() override {
     require(whitelist.whitelisted(msg.sender), "Not whitelisted");
-    _;
-  }
-
-  /**
-   * @dev reverts if the caller is not the maintainer
-   */
-  modifier onlyMaintainer() {
-    require(msg.sender == whitelistMaintainer, "Not maintainer");
     _;
   }
 }

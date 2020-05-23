@@ -88,12 +88,15 @@ describe('WhitelistedAggregatorProxy', () => {
       'proposedGetRoundData',
       'proposedLatestRoundData',
       'whitelist',
-      'whitelistMaintainer',
       'setWhitelist',
       // Ownable methods:
       'acceptOwnership',
       'owner',
       'transferOwnership',
+      // Maintainable methods:
+      'acceptMaintainer',
+      'maintainer',
+      'transferMaintainer',
       // Whitelisted methods:
       'whitelisted',
     ])
@@ -232,6 +235,53 @@ describe('WhitelistedAggregatorProxy', () => {
       it('updates the whitelist contract', async () => {
         await proxy.connect(defaultAccount).setWhitelist(newWhitelist.address)
         assert.equal(await proxy.whitelist(), newWhitelist.address)
+      })
+    })
+  })
+
+  describe('#transferMaintainer', () => {
+    describe('when called by a stranger', () => {
+      it('reverts', async () => {
+        await matchers.evmRevert(async () => {
+          await proxy
+            .connect(personas.Carol)
+            .transferMaintainer(personas.Carol.address)
+        }, 'Only callable by owner')
+      })
+    })
+
+    describe('when called by the owner', () => {
+      it('transfers the maintainer', async () => {
+        assert.equal(await proxy.maintainer(), defaultAccount.address)
+        await proxy
+          .connect(defaultAccount)
+          .transferMaintainer(personas.Carol.address)
+        await proxy.connect(personas.Carol).acceptMaintainer()
+        assert.equal(await proxy.maintainer(), personas.Carol.address)
+      })
+    })
+
+    describe('#acceptMaintainer', () => {
+      beforeEach(async () => {
+        assert.equal(await proxy.maintainer(), defaultAccount.address)
+        await proxy
+          .connect(defaultAccount)
+          .transferMaintainer(personas.Carol.address)
+      })
+
+      describe('when called by someone other than the proposed maintainer', () => {
+        it('reverts', async () => {
+          await matchers.evmRevert(async () => {
+            await proxy.connect(personas.Neil).acceptMaintainer()
+          }, 'Must be proposed maintainer')
+        })
+      })
+
+      describe('when called by the proposed maintainer', () => {
+        it('updates the maintainer', async () => {
+          await proxy.connect(personas.Carol).acceptMaintainer()
+          assert.equal(await proxy.maintainer(), personas.Carol.address)
+        })
       })
     })
   })

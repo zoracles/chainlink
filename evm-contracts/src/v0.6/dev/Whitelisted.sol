@@ -11,9 +11,6 @@ abstract contract Whitelisted is WhitelistedInterface {
 
   mapping(address => bool) public override whitelisted;
 
-  // function addToWhitelist(address _user) public virtual;
-  // function removeFromWhitelist(address _user) public virtual;
-
   /**
    * @dev reverts if the caller is not whitelisted
    */
