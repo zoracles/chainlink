@@ -81,7 +81,7 @@ func deployCoordinator(t *testing.T) coordinator {
 	require.NoError(t, err, "failed to deploy link contract to simulated ethereum blockchain")
 	coordinatorAddress, _, coordinatorContract, err :=
 		solidity_vrf_coordinator_interface.DeployVRFCoordinator(
-			neil, backend, linkAddress)
+			neil, backend, linkAddress, common.Address{} /* XXX */)
 	require.NoError(t, err, "failed to deploy VRFCoordinator contract to simulated ethereum blockchain")
 	consumerContractAddress, _, consumerContract, err :=
 		solidity_vrf_consumer_interface.DeployVRFConsumer(
@@ -213,15 +213,22 @@ func TestRandomnessRequestLog(t *testing.T) {
 // fulfillRandomnessRequest is neil fulfilling randomness requested by log.
 func fulfillRandomnessRequest(t *testing.T, coordinator coordinator,
 	log vrf.RandomnessRequestLog) *vrf.Proof {
-	proof, err := vrf.GenerateProofWithNonce(rawSecretKey, log.Seed,
-		big.NewInt(1) /* nonce */)
+	proofBlob, err := vrf.GenerateProofResponseWithNonce(rawSecretKey, log.Seed,
+		log.Raw.Raw.BlockHash, log.Raw.Raw.BlockNumber, big.NewInt(1) /* nonce */)
 	require.NoError(t, err, "could not generate VRF proof!")
-	proofBlob, err := proof.MarshalForSolidityVerifier()
-	require.NoError(t, err, "could not marshal VRF proof for VRFCoordinator!")
+	// Seems to be a bug in the simulated backend: without this extra Commit, the
+	// EVM seems to think it's still on the block in which the request was made,
+	// which means that the relevant blockhash is unavailable.
+	coordinator.backend.Commit()
 	_, err = coordinator.rootContract.FulfillRandomnessRequest(
 		coordinator.neil, proofBlob[:])
 	require.NoError(t, err, "failed to fulfill randomness request!")
 	coordinator.backend.Commit()
+	goProofResponse, err := vrf.UnmarshalProofResponse(*proofBlob)
+	require.NoError(t, err,
+		"could not rehydrate proof from blob sent to fulfillRandomnessRequest")
+	proof, err := goProofResponse.ActualProof(log.Raw.Raw.BlockHash)
+	require.NoError(t, err, "could not construct actual proof from proof response")
 	return proof
 }
 
@@ -231,16 +238,21 @@ func TestFulfillRandomness(t *testing.T) {
 	randomnessRequestLog := requestRandomness(t, coordinator, keyHash, fee, seed)
 	proof := fulfillRandomnessRequest(t, coordinator, *randomnessRequestLog)
 	output, err := coordinator.consumerContract.RandomnessOutput(nil)
-	require.NoError(t, err, "failed to get VRF output from consuming contract, after randomness request was fulfilled")
-	assert.True(t, proof.Output.Cmp(output) == 0, "VRF output from randomness request fulfillment was different than provided!")
+	require.NoError(t, err, "failed to get VRF output from consuming contract, "+
+		"after randomness request was fulfilled")
+	assert.True(t, proof.Output.Cmp(output) == 0, "VRF output from randomness "+
+		"request fulfillment was different than provided! Expected %d, got %d",
+		proof.Output, output)
 	requestID, err := coordinator.consumerContract.RequestId(nil)
 	require.NoError(t, err, "failed to get requestId from VRFConsumer")
-	assert.Equal(t, randomnessRequestLog.RequestID(), common.Hash(requestID), "VRFConsumer has different request ID than logged from randomness request!")
+	assert.Equal(t, randomnessRequestLog.RequestID(), common.Hash(requestID),
+		"VRFConsumer has different request ID than logged from randomness request!")
 	neilBalance, err := coordinator.rootContract.WithdrawableTokens(
 		nil, coordinator.neil.From)
-	require.NoError(t, err, "failed to get neil's token balance, after he successfully fulfilled a randomness request")
-	assert.True(t, neilBalance.Cmp(fee) == 0,
-		"neil's balance on VRFCoordinator was not paid his fee, despite succesfull fulfillment of randomness request!")
+	require.NoError(t, err, "failed to get neil's token balance, after he "+
+		"successfully fulfilled a randomness request")
+	assert.True(t, neilBalance.Cmp(fee) == 0, "neil's balance on VRFCoordinator "+
+		"was not paid his fee, despite succesfull fulfillment of randomness request!")
 }
 
 func TestWithdraw(t *testing.T) {

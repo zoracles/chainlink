@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -17,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_verifier_wrapper"
 	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/smartcontractkit/chainlink/core/services/vrf"
 	strpkg "github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/models/vrfkey"
 )
@@ -73,10 +75,11 @@ func TestKeyStoreEndToEnd(t *testing.T) {
 	assert.Len(t, unlockedKeys, 1, "should have only unlocked one key")
 	assert.Equal(t, unlockedKeys[0], *key,
 		"should have only unlocked the key with the offered password")
-	proof, err := ks.GenerateProof(key, big.NewInt(10))
+	proof, err := ks.GenerateProof(key, big.NewInt(10), common.Hash{})
 	assert.NoError(t, err,
 		"should be able to generate VRF proofs with unlocked keys")
-	_, err = ks.GenerateProof(newKey, big.NewInt(10)) // ...but only for unlocked keys
+	// ...but only for unlocked keys
+	_, err = ks.GenerateProof(newKey, big.NewInt(10), common.Hash{})
 	require.Error(t, err,
 		"should not be able to generate VRF proofs unless key has been unlocked")
 	require.Contains(t, err.Error(), "has not been unlocked",
@@ -86,11 +89,15 @@ func TestKeyStoreEndToEnd(t *testing.T) {
 	assert.True(t, bytes.Equal(encryptedKey.PublicKey[:], key[:]),
 		"should have recovered the encrypted key for the requested public key")
 	verifier := vrfVerifier() // Generated proof is valid
-	_, err = verifier.RandomValueFromVRFProof(nil, proof[:])
+	response, err := vrf.UnmarshalProofResponse(*proof)
+	require.NoError(t, err)
+	rawProof, err := response.P.MarshalForSolidityVerifier()
+	require.NoError(t, err, "recovered bad VRF proof")
+	_, err = verifier.RandomValueFromVRFProof(nil, rawProof[:])
 	require.NoError(t, err,
 		"failed to get VRF proof output from solidity VRF contract")
 	require.NoError(t, ks.Delete(key), "failed to delete VRF key")
-	_, err = ks.GenerateProof(key, big.NewInt(10))
+	_, err = ks.GenerateProof(key, big.NewInt(10), common.Hash{})
 	require.Error(t, err,
 		"should not be able to generate VRF proofs with a deleted key")
 	require.Contains(t, err.Error(), "has not been unlocked",
@@ -105,6 +112,6 @@ func TestKeyStoreEndToEnd(t *testing.T) {
 	err = ks.Import(keyjson, phrase)
 	require.Equal(t, strpkg.MatchingVRFKeyError, err,
 		"should be prevented from importing a key with a public key already present in the DB")
-	_, err = ks.GenerateProof(key, big.NewInt(10))
+	_, err = ks.GenerateProof(key, big.NewInt(10), common.Hash{})
 	require.NoError(t, err, "should be able to generate proof with unlocked key")
 }
