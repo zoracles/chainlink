@@ -1,11 +1,6 @@
 # Zoracles
 
-[![Join the chat at https://discordapp.com/invite/aSK4zew](https://img.shields.io/discord/592041321326182401.svg?logoColor=white)](https://discordapp.com/invite/aSK4zew)
-[![CircleCI](https://circleci.com/gh/smartcontractkit/chainlink.svg?style=shield)](https://circleci.com/gh/smartcontractkit/chainlink)
-[![Go Report Card](https://goreportcard.com/badge/github.com/smartcontractkit/chainlink)](https://goreportcard.com/report/github.com/smartcontractkit/chainlink)
-[![GoDoc](https://godoc.org/github.com/smartcontractkit/chainlink?status.svg)](https://godoc.org/github.com/smartcontractkit/chainlink)
-[![Maintainability](https://api.codeclimate.com/v1/badges/273722bb9f6f22d799bd/maintainability)](https://codeclimate.com/github/smartcontractkit/chainlink/maintainability)
-[![Test Coverage](https://api.codeclimate.com/v1/badges/273722bb9f6f22d799bd/test_coverage)](https://codeclimate.com/github/smartcontractkit/chainlink/test_coverage)
+Join our growing [community] (https://discord.gg/9vn7UdY)
 
 Chainlink is middleware to simplify communication with blockchains.
 Here you'll find the Chainlink Golang node, currently in alpha.
