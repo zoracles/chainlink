@@ -1,6 +1,6 @@
 # Zoracles
 
-Join our growing [community] (https://discord.gg/9vn7UdY)
+Join our growing [community](https://discord.gg/9vn7UdY) [community] (https://discord.gg/9vn7UdY)
 
 Chainlink is middleware to simplify communication with blockchains.
 Here you'll find the Chainlink Golang node, currently in alpha.
